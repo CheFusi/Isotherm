@@ -1,0 +1,1966 @@
+---
+title: "AM_Isotherm"
+output: html_document
+date: "2022-10-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## AM Isotherm
+
+Libraries
+
+```{r chunksetup, include=FALSE, message=FALSE, warning = FALSE}
+
+
+libs_1<-c("tidyverse","knitr","psych","reshape2","rmarkdown")
+
+#data manipulation/exploration
+libs_2<-c("readxl","readr","tidyr","GGally","naniar","readr")
+
+
+# plotting
+libs_3<-c("ggplot2","viridis","ggpubr","cowplot") 
+
+#ggpubr = package for publishing
+#cowplot=  #to create compounded figures
+
+#tables
+libs_4<-c("dplyr","stargazer","xlsx","ggplot2","scales","extrafont","writexl")
+
+
+#isothermFitting
+#install.packages(PUPAIM)
+library("PUPAIM")
+
+#install.packages("devtools")
+
+
+
+libs<-c(libs_1,libs_2,libs_3,libs_4)
+
+lapply(libs,require, character.only=TRUE)
+
+cbbPalette <- c("#000000", "#E69F00", "#0072B2", "#009E73","#D55E00","#56B4E9", "#F0E442", "#CC79A7")
+
+#ggthemr('dust')
+#ggthemr_reset()
+```
+
+Molecular weight calculations
+
+```{r}
+MW_NH3=14.007+(3*1.008)
+MW_NH4=14.007+(4*1.008)
+MW_N = 14.007
+MW_H = 1.008
+MW_P = 30.974
+MW_S = 32.006
+MW_Na= 22.9
+MW_Mg= 24.305
+MW_K=39.098
+MW_Cl=35.45
+MW_C=12.011
+MW_S=32.06
+MW_O=15.999
+MW_SO4_T=MW_S+(4*MW_O)
+MW_H2PO4_T=MW_P+(4*MW_O)+(2*MW_H) ## because the formula uses H2PO4 and in the acidified sample we expect this form
+MW_Ac=(2*MW_C)+(3*MW_H)+(2*MW_O)
+MW_H2CO3=(MW_C+(3*MW_O)+(2*MW_H))
+```
+
+Converting to mole
+
+```{r}
+
+moles<-data.frame(MW_Na, MW_NH4,MW_K,MW_Mg)
+moles_An<-data.frame(MW_Ac, MW_Cl,MW_H2PO4_T, MW_SO4_T,MW_H2CO3)
+```
+
+Setting up mass of biochar and volume of urine dataframe
+
+```{r}
+
+volume<-rep(c(0.02,0.02,0.02,
+                  0.02,0.02,0.02,
+                  0.005, 0.005, 0.005,
+                  0.005,0.005,0.005,
+                  0.005,0.005,0.005,
+                  0.0011,0.0011,0.0011,
+                  0.0011,0.0011,0.0011,
+                  0.0011,0.0011,0.0011),times=3)
+volume<-data.frame(volume)
+
+mass_biochar<-rep(c(0.1,0.1,0.1,
+                          0.2,0.2,0.2,
+                          0.1, 0.1, 0.1,
+                          0.2,0.2,0.2,
+                          0.35,0.35,0.35,
+                          0.1,0.1,0.1,
+                          0.2,0.2,0.2,
+                          0.5,0.5,0.5),times=3)
+mass_biochar<-data.frame(mass_biochar)
+mass_biochar
+                  
+```
+
+## Extracting Data from Excel Files
+
+```{r}
+#isothermFittinglibrary(PUPAIM)
+
+setwd("/Users/soliverfusi/OneDrive/Desktop/Fusi/Sorption/Final_Data")
+
+path<-"Final_SorptionIsotherm_Data_AK_to_AO.xlsx"
+
+FullSheet <- path%>%
+  excel_sheets()%>% #extracts the sheet name of the file fed to the 'path' function
+  set_names() %>%
+  map(read_excel,path=path,na=c(common_na_strings,"n.a."))
+```
+
+Cations
+
+```{r}
+
+
+AM_5_10_15<- data.frame(rbind(FullSheet$"220816_AM_05"[c(7:30),], 
+                          FullSheet$"220816_AM_10"[c(7:30),],
+                          FullSheet$"220816_AM_15"[c(7:30),]))
+
+#changing all the columns to numeric (noteably the Ox columns since I use "In" and "A"-"C",
+#it registers as a character column
+AM_5_10_15[] <- lapply(AM_5_10_15, function(x) as.numeric(as.character(x)))
+
+AM_20_30<- data.frame(rbind(FullSheet$"220816_AM_20"[c(7:30),],
+                          FullSheet$"220816_AM_30"[c(7:30),]))
+AM_20_30[] <- lapply(AM_20_30, function(x) as.numeric(as.character(x)))
+
+```
+
+Anions
+
+```{r}
+
+AM_5_10_15_An<- data.frame(rbind(FullSheet$"221028_AM_05_An"[c(7:30),],
+                               FullSheet$"221028_AM_10_An"[c(7:30),],
+                               FullSheet$"221028_AM_15_An"[c(7:30),]))
+AM_5_10_15_An[] <- lapply(AM_5_10_15_An, function(x) as.numeric(as.character(x)))
+
+AM_20_30_An<- data.frame(rbind(FullSheet$"221028_AM_20_An"[c(7:30),],
+                               FullSheet$"221028_AM_30_An"[c(7:30),]))
+AM_20_30_An[] <- lapply(AM_20_30_An, function(x) as.numeric(as.character(x)))
+
+
+```
+
+Influents
+
+```{r}
+#Cations
+
+AMIn_5_10_15<- data.frame(FullSheet$"220816_AM_05"[c(1:6),])
+AMIn_20_30<- data.frame(FullSheet$"220816_AM_20"[c(1:6),])
+
+#Anions
+AMIn_5_10_15_An<- data.frame(FullSheet$"221028_AM_05_An"[c(1:6),])
+AMIn_20_30_An<- data.frame(FullSheet$"221028_AM_20_An"[c(1:6),])
+
+                    
+```
+
+Controls
+
+```{r}
+
+#Cations
+AMctrl_5_10_15<- data.frame(FullSheet$"220816_AM_05"[c(31:39),])
+AMctrl_20_30<- data.frame(FullSheet$"220816_AM_20"[c(31:39),])
+
+#Anions
+AMctrl_5_10_15_An<- data.frame(FullSheet$"221028_AM_05_An"[c(31:39),])
+AMctrl_20_30_An<- data.frame(FullSheet$"221028_AM_20_An"[c(31:39),])
+
+```
+
+# Adjusting Dilution Errors - Dismissing data (assigning as NA's)
+
+```{r}
+
+
+#AMctrl_20_30[5,4:6]= c(NA,NA,NA)
+#AMctrl_20_30[5,4:6]= c(NA,NA,NA)
+
+
+
+#The ctrl a.1 is overly diluted, so I'm adjusting the error by tAMing the average of the K concentration in all the other samples, and using it to normalize 
+
+#Adjusting_factor_1<-(mean(AMctrl_20_30[c(2:4,5:9,6)])/AMctrl_20_30[1,6])
+#AMctrl_20_30[1,3:6]<-AMctrl_20_30[1,4:6]*Adjusting_factor_1
+
+#The ctrl B2 is underly diluted, so tAMing the average of the other two values to create an adjustment 
+
+#Adjusting_factor_2<-(mean(AMctrl_20_30[c(1:4,6:9),6])/AMctrl_20_30[5,6])
+#AMctrl_20_30[5,3:6]<-AMctrl_20_30[5,4:6]*Adjusting_factor_2
+
+```
+
+pH
+
+```{r}
+AM_5_10_15_pH<- data.frame(rbind(FullSheet$"220818_AM_5_pH"[c(7:30),],
+                               FullSheet$"220818_AM_10_pH"[c(7:30),],
+                               FullSheet$"220818_AM_15_pH"[c(7:30),]))
+AM_5_10_15_pH[] <- lapply(AM_5_10_15_pH, function(x) as.numeric(as.character(x)))
+
+AM_20_30_pH<- data.frame(rbind(FullSheet$"220815_AM_20_pH"[c(7:30),],
+                               FullSheet$"220815_AM_30_pH"[c(7:30),]))
+AM_20_30_pH[] <- lapply(AM_20_30_pH, function(x) as.numeric(as.character(x)))
+```
+
+```{r}
+
+#naming columns so they can be referenced easily later
+## CATIONS
+colnames(AM_5_10_15)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+colnames(AM_20_30)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+#----------------------------------------------------------------------
+##ANIONS
+colnames(AM_5_10_15_An)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate','Carbonate'))
+
+colnames(AM_20_30_An)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate','Carbonate'))
+#----------------------------------------------------------------------
+## IN
+colnames(AMIn_5_10_15)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+
+colnames(AMIn_20_30)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+#----------------------------------------------------------------------
+##pH 
+colnames(AM_5_10_15_pH)<-as.character(c('Ox','ID','Rep','pH'))
+colnames(AM_20_30_pH)<-as.character(c('Ox','ID','Rep','pH'))
+#-------------------------------------------------------------------------------
+```
+
+## Converting to moles
+
+```{r}
+#converting to moles 
+
+#influent Cations
+
+AM_5_In_mol<-mapply('/', AMIn_5_10_15[,4:7],moles)
+AM_5_In_mol<-data.frame(cbind(AMIn_5_10_15[,1:3],AM_5_In_mol))
+colnames(AM_5_In_mol)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+
+#----------------------------------------------------------------------
+AM_20_In_mol<-mapply('/', AMIn_20_30[,4:7],moles)
+AM_20_In_mol<-data.frame(cbind(AMIn_20_30[,1:3],AM_20_In_mol))
+colnames(AM_20_In_mol)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+AM_20_In_mol
+
+#----------------------------------------------------------------------
+# Main 8 Cations 
+
+AM_5_mol<-mapply('/', AM_5_10_15[,4:7],moles)
+
+AM_5_mol<-data.frame(cbind(AM_5_10_15[,1:3],AM_5_mol))
+colnames(AM_5_mol)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+AM_5_mol
+
+#----------------------------------------------------------------------
+AM_20_mol<-mapply('/', AM_20_30[,4:7],moles)
+
+AM_20_mol<-data.frame(cbind(AM_20_30[,1:3],AM_20_mol))
+colnames(AM_20_mol)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+AM_20_mol
+#----------------------------------------------------------------------
+
+#influent Anions
+
+AM_5_An_In_mol<-mapply('/', AMIn_5_10_15_An[,4:8],moles_An)
+AM_5_An_In_mol<-data.frame(cbind(AMIn_5_10_15_An[,1:3],AM_5_An_In_mol))
+colnames(AM_5_An_In_mol)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate','Carbonate'))
+#----------------------------------------------------------------------
+AM_20_An_In_mol<-mapply('/', AMIn_20_30_An[,4:8],moles_An)
+AM_20_An_In_mol<-data.frame(cbind(AMIn_20_30_An[,1:3],AM_20_An_In_mol))
+colnames(AM_20_An_In_mol)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate','Carbonate'))
+
+#----------------------------------------------------------------------
+
+# Main 8 Anions
+
+AM_5_An_mol<-mapply('/', AM_5_10_15_An[,4:8],moles_An)
+
+AM_5_An_mol<-data.frame(cbind(AM_5_10_15_An[,1:3],AM_5_An_mol))
+colnames(AM_5_An_mol)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate'))
+AM_5_An_mol
+
+#----------------------------------------------------------------------
+
+AM_20_An_mol<-mapply('/', AM_20_30_An[,4:8],moles_An)
+
+AM_20_An_mol<-data.frame(cbind(AM_20_30_An[,1:3],AM_20_An_mol))
+colnames(AM_20_An_mol)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate'))
+AM_20_An_mol
+
+#Ctrls Cations
+
+AM_ctrl_5_mol<-mapply('/', AMctrl_5_10_15[,4:7],moles)
+AM_ctrl_5_mol<-data.frame(cbind(AMctrl_5_10_15[,1:3],AM_ctrl_5_mol))
+colnames(AM_ctrl_5_mol)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+
+AM_ctrl_20_mol<-mapply('/', AMctrl_20_30[,4:7],moles)
+AM_ctrl_20_mol<-data.frame(cbind(AMctrl_20_30[,1:3],AM_ctrl_20_mol))
+colnames(AM_ctrl_20_mol)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+
+#Ctrl Anions 
+
+AM_ctrl_5_An_mol<-mapply('/', AMctrl_5_10_15_An[,4:8],moles_An)
+AM_ctrl_5_An_mol<-data.frame(cbind(AMctrl_5_10_15_An[,1:3],AM_ctrl_5_An_mol))
+colnames(AM_ctrl_5_An_mol)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate'))
+
+AM_ctrl_20_An_mol<-mapply('/', AMctrl_20_30_An[,4:8],moles_An)
+AM_ctrl_20_An_mol<-data.frame(cbind(AMctrl_20_30_An[,1:3],AM_ctrl_20_An_mol))
+colnames(AM_ctrl_20_An_mol)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate'))
+
+```
+
+## Combining Influent 6 with Control 3 for each reactor size, and Taking the means
+
+Combining Ctrl's and Influent
+
+```{r}
+
+#taking the mean of the 6 influent samples
+
+#Cations
+
+AM_5_In_avg<-data.frame(lapply(AM_5_In_mol[,4:7], mean))
+AM_20_In_avg<-data.frame(lapply(AM_20_In_mol[,4:7], mean))
+
+#Anions
+AM_5_In_An_avg<-data.frame(lapply(AM_5_An_In_mol[,4:8], mean))
+AM_20_In_An_avg<-data.frame(lapply(AM_20_An_In_mol[,4:8], mean))
+
+#taking the mean of A, B, and C
+
+#Cations
+AM_5_Ctrl_Avg<-data.frame( AM_ctrl_5_mol %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+    summarise_at(c("Sodium","Ammonium","Potassium",'Magnesium'),mean,na.rm=TRUE))
+AM_5_Ctrl_Avg
+
+AM_20_Ctrl_Avg<-data.frame(AM_ctrl_20_mol %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+    summarise_at(c("Sodium","Ammonium","Potassium",'Magnesium'),mean,na.rm=TRUE))
+AM_20_Ctrl_Avg
+
+#Anions
+AM_5_An_Ctrl_Avg<-data.frame(AM_ctrl_5_An_mol %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+    summarise_at(c('Acetate','Chloride','Phosphate', 'Sulfate','Carbonate'),mean,na.rm=TRUE))
+AM_5_An_Ctrl_Avg
+
+AM_20_An_Ctrl_Avg<-data.frame(AM_ctrl_20_An_mol %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+    summarise_at(c('Acetate','Chloride','Phosphate', 'Sulfate','Carbonate'),mean,na.rm=TRUE))
+AM_20_An_Ctrl_Avg
+
+
+#Cations 
+
+#Combining the average of the In and each Ctrl (A,B,or C) and then taking the mean
+
+#A
+
+AM_5_In_ABC_A<-rbind(AM_5_In_avg[1,],AM_5_Ctrl_Avg[1,2:5])
+AM_5_In_A<-t(data.frame(colMeans(AM_5_In_ABC_A, na.rm=TRUE)))
+
+AM_20_In_ABC_A<-rbind(AM_20_In_avg[1,],AM_20_Ctrl_Avg[1,2:5])
+AM_20_In_A<-t(data.frame(colMeans(AM_20_In_ABC_A, na.rm=TRUE)))
+
+#B
+AM_5_In_ABC_B<-rbind(AM_5_In_avg[1,],AM_5_Ctrl_Avg[2,2:5])
+AM_5_In_B<-t(data.frame(colMeans(AM_5_In_ABC_B, na.rm=TRUE)))
+
+AM_20_In_ABC_B<-rbind(AM_20_In_avg[1,],AM_20_Ctrl_Avg[2,2:5])
+AM_20_In_B<-t(data.frame(colMeans(AM_20_In_ABC_B, na.rm=TRUE)))
+
+#C
+AM_5_In_ABC_C<-rbind(AM_5_In_avg[1,],AM_5_Ctrl_Avg[3,2:5])
+AM_5_In_C<-t(data.frame(colMeans(AM_5_In_ABC_C, na.rm=TRUE)))
+
+AM_20_In_ABC_C<-rbind(AM_20_In_avg[1,],AM_20_Ctrl_Avg[3,2:5])
+AM_20_In_C<-t(data.frame(colMeans(AM_20_In_ABC_C, na.rm=TRUE)))
+
+#Anions 
+
+#A
+AM_5_An_In_ABC_A<-rbind(AM_5_In_An_avg[,],AM_5_An_Ctrl_Avg[1,2:6])
+AM_5_An_In_A<-t(data.frame(colMeans(AM_5_An_In_ABC_A, na.rm=TRUE)))
+
+AM_20_An_In_ABC_A<-rbind(AM_20_In_An_avg[,],AM_20_An_Ctrl_Avg[1,2:6])
+AM_20_An_In_A<-t(data.frame(colMeans(AM_20_An_In_ABC_A, na.rm=TRUE)))
+
+#B
+AM_5_An_In_ABC_B<-rbind(AM_5_In_An_avg[,],AM_5_An_Ctrl_Avg[2,2:6])
+AM_5_An_In_B<-t(data.frame(colMeans(AM_5_An_In_ABC_B, na.rm=TRUE)))
+
+AM_20_An_In_ABC_B<-rbind(AM_20_In_An_avg[,],AM_20_An_Ctrl_Avg[2,2:6])
+AM_20_An_In_B<-t(data.frame(colMeans(AM_20_An_In_ABC_B, na.rm=TRUE)))
+
+#C
+AM_5_An_In_ABC_C<-rbind(AM_5_In_An_avg[,],AM_5_An_Ctrl_Avg[3,2:6])
+AM_5_An_In_C<-t(data.frame(colMeans(AM_5_An_In_ABC_C, na.rm=TRUE)))
+
+AM_20_An_In_ABC_C<-rbind(AM_20_In_An_avg[,],AM_20_An_Ctrl_Avg[3,2:6])
+AM_20_An_In_C<-t(data.frame(colMeans(AM_20_An_In_ABC_C, na.rm=TRUE)))
+
+#Creating a dataframe with the new 'In' value, which is the average of the In and the ctrls
+
+#Cations
+AM_5_In_ABC<-data.frame(rbind(AM_5_In_A,AM_5_In_B,AM_5_In_C))
+AM_20_In_ABC<-data.frame(rbind(AM_20_In_A,AM_20_In_B,AM_20_In_C))
+
+row.names(AM_5_In_ABC)<-c("A","B","C")
+row.names(AM_20_In_ABC)<-c("A","B","C")
+
+#Anions
+AM_5_An_In_ABC<-data.frame(rbind(AM_5_An_In_A,AM_5_An_In_B,AM_5_An_In_C))
+AM_20_An_In_ABC<-data.frame(rbind(AM_20_An_In_A,AM_20_An_In_B,AM_20_An_In_C))
+
+row.names(AM_5_An_In_ABC)<-c("A","B","C")
+row.names(AM_20_An_In_ABC)<-c("A","B","C")
+
+
+```
+
+## Influent (6) Statistics in moles
+
+```{r}
+#-------------------------------------------------------------------------------
+#pivoting 5/10/15% influent samples to long format for easier manipulation
+AMIn5Long<-
+  AM_5_In_mol%>%
+  pivot_longer(
+    cols=c(Sodium,Ammonium,Potassium,Magnesium),
+    names_to ="Cation_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5%)
+AM5Stats <- AMIn5Long %>%
+  group_by(Cation_Species) %>%
+  summarise(AM5In_mean=mean(Concentration,na.rm=FALSE),
+            #.groups='rowwise',
+            AM5In_std=sd(Concentration, na.rm=FALSE),
+            AM_perc_std=AM5In_std/ AM5In_mean*100)
+AM5Stats<-data.frame(AM5Stats)
+#-------------------------------------------------------------------------------
+#pivoting 20/25/30% influent samples to long format for easier manipulation
+AMIn20Long<-
+  AM_20_In_mol%>%
+  pivot_longer(
+    cols=c(Sodium,Ammonium,Potassium,Magnesium),
+    names_to ="Cation_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+AMIn20_Stats <-data.frame( AMIn20Long %>%
+  group_by(Cation_Species) %>%
+  summarise(AMIn20_Mean=mean(Concentration,na.rm=FALSE),
+            #.groups='rowwise',
+            AMIn20_Std=sd(Concentration, na.rm=FALSE)))
+AMIn20_Stats$Percent<-mapply('/', AMIn20_Stats$AMIn20_Std,AMIn20_Stats$AMIn20_Mean)
+
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5% for Na and K)
+AM20Stats <- data.frame(AMIn20Long %>%
+  group_by(Cation_Species) %>%
+  summarise(AM20In_mean=mean(Concentration,na.rm=FALSE),
+            #.groups='rowwise',
+            AM20In_std=sd(Concentration, na.rm=FALSE),
+            AM_perc_std=AM20In_std/ AM20In_mean*100))
+#or can also do
+#AMIn20_Stats$Percent<-mapply('/', AMIn20_Stats$AMIn20_Std,AMIn20_Stats$AMIn20_Mean)
+AM5Stats
+AM20Stats
+```
+
+## Control Statistics
+
+```{r}
+
+
+
+#pivoting
+AMctrl5Long<-
+  AM_ctrl_5_mol%>%
+  pivot_longer(
+    cols=c(Sodium,Ammonium,Potassium,Magnesium),
+    names_to ="Cation_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5%)
+AM5ctrlStats <- AMctrl5Long %>%
+  group_by(Cation_Species) %>%
+  summarise(AM5ctrl_mean=mean(Concentration,na.rm=TRUE),
+            #.groups='rowwise',
+            AM5ctrl_std=sd(Concentration, na.rm=TRUE),
+            AM_perc_std=AM5ctrl_std/ AM5ctrl_mean*100)
+AM5ctrlStats<-data.frame(AM5ctrlStats)
+
+
+#pivoting
+AMctrl20Long<-
+  AM_ctrl_20_mol%>%
+  pivot_longer(
+    cols=c(Sodium,Ammonium,Potassium,Magnesium),
+    names_to ="Cation_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5%)
+AM20ctrlStats <- AMctrl20Long %>%
+  group_by(Cation_Species) %>%
+  summarise(AM20ctrl_mean=mean(Concentration,na.rm=TRUE),
+            #.groups='rowwise',
+            AM20ctrl_std=sd(Concentration, na.rm=TRUE),
+            AM_perc_std=AM20ctrl_std/ AM20ctrl_mean*100)
+AM20ctrlStats<-data.frame(AM20ctrlStats)
+
+```
+
+## Combining All concentration triplicates into One Large Data Frame
+
+##Combining Anions and Cations into One Dataframe for PHREEQC
+
+-   all the molar concentration of the ions, in triplicate, combined into one dataframe
+
+-   saving the dataframe as an excel file that can be imported into PHREEQC to calculate equilibrium activity.
+
+```{r}
+#Combining cations and anions into one dataframe for convenient activity calculations
+
+#----------------------------------------------------------------------
+Phreeqc_num<-data.frame(seq(1,nrow(AM_5_mol)))
+colnames(Phreeqc_num)<-("Number")
+
+AM_5_Ion_All <- data.frame(rbind(AM_5_mol[,]),
+                           AM_5_An_mol[,-c(1:3)],
+                           AM_5_10_15_pH[,4])
+AM_5_Ion_All<-data.frame(cbind(Phreeqc_num[,],AM_5_Ion_All))
+colnames(AM_5_Ion_All)<-as.character(c("PHREEQC_number",'Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate', "pH"))
+
+
+AM_5_10_15_for_PHREEQC<-data.frame(AM_5_Ion_All[,c(1,5:14)])
+
+colnames(AM_5_10_15_for_PHREEQC)=c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
+
+write.table(AM_5_10_15_for_PHREEQC,"/Users/soliverfusi/OneDrive/Desktop/Fusi/Sorption/Final_Data/Activities/AM_5_10_15_for_PHREEQC.txt", sep = "\t",
+            row.names = FALSE, col.names = FALSE)
+
+
+
+#write_xlsx (AM_5_Ion_All,"/Users/soliverfusi/OneDrive/Desktop/Fusi/Sorption/Final_Data/Activities/AM_5_10_15_for_PHREEQC.xlsx")
+
+#----------------------------------------------------------------------
+# 
+AM_20_Ion_All <- data.frame(rbind(AM_20_mol[,]),
+                            AM_20_An_mol[,-c(1:3)],
+                            AM_20_30_pH[,4])
+AM_20_Ion_All<-data.frame(cbind(Phreeqc_num[c(1:48),],AM_20_Ion_All))
+colnames(AM_20_Ion_All)<-as.character(c("PHREEQC_number",'Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate', "pH"))
+# 
+##editing to try to fit the exact PHREEQC format to minimize manual editing
+# colnames(AM_20_Ion_All)<-as.character(c("PHREEQC_number",'Ox','ID','Rep','Sodium','Ammonium','Potassium','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate', "pH"))
+# 
+# write_xlsx (AM_20_Ion_All,"/Users/soliverfusi/OneDrive/Desktop/Fusi/Sorption/Final_Data/Activities/AM_20_30_for_PHREEQC.xlsx")
+
+
+AM_20_30_for_PHREEQC<-data.frame(AM_20_Ion_All[,c(1,5:14)])
+colnames(AM_20_30_for_PHREEQC)<-c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
+
+write.table(AM_20_30_for_PHREEQC,"/Users/soliverfusi/OneDrive/Desktop/Fusi/Sorption/Final_Data/Activities/AM_20_30_for_PHREEQC.txt", sep = "\t",
+            row.names = FALSE, col.names = FALSE)
+
+
+
+
+```
+
+##PHREEQC
+
+-- Copy over the data in the text file into the template labled 'AX_TEMPLATE_Activities.txt' and rename the file. Easiest to open the template in R and save as a new .txt file.
+
+-   Note that the r output file e.g. "AM_20_30_for_PHREEQC.txt" is different from the PHREEQC input file "AM_20_30_Activities.txt". Make sure to update the later with the information in the former
+
+-OR Add the followiing to the top of the .txt file that is created
+
+TITLE Activity of AK_5_10_15
+
+SOLUTION_SPREAD
+
+```         
+-units mmol/L
+```
+
+Number Na N(-3) K Mg Acetate Cl P S(6) C(4) pH
+
+```         
+                                charge
+```
+
+-- Add the followiing to the bottom of the .txt file that is created
+
+NOTE: Make sure to update the file name
+
+SELECTED_OUTPUT #read more: <https://water.usgs.gov/water-resources/software/PHREEQC/documentation/phreeqc3-html/phreeqc3-45.htm#50593793_20239>
+
+```         
+Save SOLUTION 1-72
+
+#CALCULATE_VALUES
+#
+#
+#   thefunction(NH4+)
+#   -start
+#   10  thefunction = -9999.999
+#   20  thefunction = ACT("NH4+")   
+#   30  SAVE thefunction 
+#   -end
+#
+
+
+SELECTED_OUTPUT
+#read more: https://water.usgs.gov/water-resources/software/PHREEQC/documentation/phreeqc3-html/phreeqc3-45.htm#50593793_20239 
+
+
+
+
+    -file AK_5_10_15_Activity.out
+  -simulation  false
+  -state  false
+  -solution  false
+  -distance  false
+  -time  false
+  -step  false
+  -pe  false
+  -pH  false
+  -alkalinity  false
+  -ionic_strength   
+  -activities  Na+  NH4+  K+
+  #--activities  Na+  NH4+  K+  Acetate-  Cl-  HPO4-2  SO4-2  HCO3-  pH
+  #-calculate_values  ("thefunction") #read more: https://water.usgs.gov/water-resources/software/PHREEQC/documentation/phreeqc3-html/phreeqc3-7.htm#50593793_35035
+
+END
+```
+
+END
+
+NOTE: The output file will default to save in the same folder as the PHREEQC application\
+
+-   Copy the outputs, which will be ionic strength and log ALK into the ALK tab in the main excel sheet
+
+## Activities
+
+AM_5_10_15_Act_Ion_str\<- data.frame(rbind(FullSheet\$"AM_05_Act"[c(1:24),c(4:7)],
+
+FullSheet\$"AM_10_Act"[c(1:24),c(4:7)],
+
+FullSheet\$"AM_15_Act"[c(1:24),c(4:7)]))
+
+```{r}
+
+AM_5_10_15_Act_Ion_str<- data.frame(rbind(FullSheet$"AM_05_Act"[c(1:24),c(4:7)],
+                                   FullSheet$"AM_10_Act"[c(1:24),c(4:7)],
+                                   FullSheet$"AM_15_Act"[c(1:24),c(4:7)]))
+
+#Converting log act to act
+AM_5_10_15_Act_Ion_str[,c(2:4)]<-1000*(10^(AM_5_10_15_Act_Ion_str[,c(2:4)]))
+colnames(AM_5_10_15_Act_Ion_str)<-as.character(c("Ionic_str","Act_NH4","Act_Na","Act_K"))
+
+AM_5_All<-data.frame(cbind(AM_5_Ion_All,AM_5_10_15_Act_Ion_str))
+
+
+AM_20_30_Act_Ion_str<- data.frame(rbind(FullSheet$"AM_20_Act"[c(1:24),c(4:7)],
+                                   FullSheet$"AM_25_Act"[c(1:24),c(4:7)],
+                                   FullSheet$"AM_30_Act"[c(1:24),c(4:7)]))
+AM_20_30_Act_Ion_str[,c(2:4)]<-1000*(10^(AM_20_30_Act_Ion_str[,c(2:4)]))
+colnames(AM_20_30_Act_Ion_str)<-as.character(c("Ionic_str","Act_NH4","Act_Na","Act_K"))
+
+AM_20_All<-data.frame(cbind(AM_20_Ion_All,AM_20_30_Act_Ion_str))
+```
+
+## Assigning the Influent as the average on the controls and the initial influent
+
+Creating a dataframe of just the influents
+
+```{r}
+
+#creating the in columns, considering 2 reps of C, 3 of B, 3 of A (in this order), and how each is in triplicate
+
+#Cations
+
+AM_5_Cat_In<-data.frame(rbind(data.frame(lapply(AM_5_In_ABC[3,],rep,times=6)),
+                         data.frame(lapply(AM_5_In_ABC[2,],rep,times=9)),
+                         data.frame(lapply(AM_5_In_ABC[1,],rep,times=9))))
+
+AM_5_Cat_In<-data.frame(lapply(AM_5_Cat_In,rep, times=3))
+colnames(AM_5_Cat_In)<-c("AM_Na_In","AM_NH4_In","AM_K_In","AM_Mg_In")
+#-------------------------------------------------------------------------------
+AM_20_Cat_In<-data.frame(rbind(data.frame(lapply(AM_20_In_ABC[3,],rep,times=6)),
+                         data.frame(lapply(AM_20_In_ABC[2,],rep,times=9)),
+                         data.frame(lapply(AM_20_In_ABC[1,],rep,times=9))))
+
+AM_20_Cat_In<-data.frame(lapply(AM_20_Cat_In,rep, times=2))
+colnames(AM_20_Cat_In)<-c("AM_Na_In","AM_NH4_In","AM_K_In","AM_Mg_In")
+#-------------------------------------------------------------------------------
+
+
+AM_5_An_In<-data.frame(rbind(data.frame(lapply(AM_5_An_In_ABC[3,],rep,times=6)),
+                         data.frame(lapply(AM_5_An_In_ABC[2,],rep,times=9)),
+                         data.frame(lapply(AM_5_An_In_ABC[1,],rep,times=9))))
+
+AM_5_An_In<-data.frame(lapply(AM_5_An_In,rep, times=3))
+colnames(AM_5_An_In)<-c("AM_Ace_In","AM_Cl_In","AM_P_In","AM_S_In","AM_Carb_In")
+
+#-------------------------------------------------------------------------------
+AM_20_An_In<-data.frame(rbind(data.frame(lapply(AM_20_An_In_ABC[3,],rep,times=6)),
+                         data.frame(lapply(AM_20_An_In_ABC[2,],rep,times=9)),
+                         data.frame(lapply(AM_20_An_In_ABC[1,],rep,times=9))))
+
+AM_20_An_In<-data.frame(lapply(AM_20_An_In,rep, times=2))
+colnames(AM_20_An_In)<-c("AM_Ace_In","AM_Cl_In","AM_P_In","AM_S_In","AM_Carb_In")
+#-------------------------------------------------------------------------------
+
+```
+
+## Adding biochar mass, urine volume, and initial urine
+
+AM_5_All\<-data.frame(cbind(AM_5_All,AM_5_Cat_In,AM_5_An_In,volume, mass_biochar))
+
+AM_20_All\<-data.frame(cbind(AM_20_All,AM_20_Cat_In,AM_20_An_In, volume[c(1:48),], mass_biochar[c(1:48),]))
+
+AM_5_All
+
+```{r}
+#Cations
+
+AM_5_All<-data.frame(cbind(AM_5_All,AM_5_Cat_In,AM_5_An_In,volume, mass_biochar))
+
+AM_20_All<-data.frame(cbind(AM_20_All,AM_20_Cat_In,AM_20_An_In, volume[c(1:48),], mass_biochar[c(1:48),]))
+
+colnames(AM_20_All)[28:29]<-c("volume","mass_biochar") #needed to add because I extracted only a portion of the volumen and mass columns and for some reason that changes the names
+```
+
+## Calculating the Normalized Ion Concentrations and Dose
+
+```{r}
+AM_5_All[30:38]<-data.frame(mapply('/',AM_5_All[5:13],AM_5_All[19:27]))
+AM_20_All[30:38]<-data.frame(mapply('/',AM_20_All[5:13],AM_20_All[19:27]))
+
+colnames(AM_5_All)[30:38]<-c("Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm")
+colnames(AM_20_All)[30:38]<-c("Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm")
+
+```
+
+## Determining Dose
+
+AM_5_All
+
+```{r}
+AM_5_All$Dose<-(mapply('/',AM_5_All$mass_biochar,AM_5_All$volume))
+AM_20_All$Dose<-(mapply('/',AM_20_All$mass_biochar,AM_20_All$volume))
+```
+
+## Calculating Q of each Triplicate
+
+Note: the Q is based on the C_in which is the average of the initial value and the control
+
+```{r}
+
+Q_function<-function(df,Q,C_In,C_eq,volume,m_s) {
+  df[[Q]]<-((df[[C_In]]-df[[C_eq]])*df[[volume]]/df[[m_s]])
+  }
+
+AM_20_All$Q_NH4<-Q_function(AM_20_All,"Q_NH4","AM_NH4_In","Ammonium","volume","mass_biochar")
+
+AM_5_All$Q_NH4<-Q_function(AM_5_All,"Q_NH4","AM_NH4_In","Ammonium","volume","mass_biochar")
+
+#----------------------------------------------------------------------
+
+AM_20_All$Q_Na<-Q_function(AM_20_All,"Q_Na","AM_Na_In","Sodium","volume","mass_biochar")
+
+AM_5_All$Q_Na<-Q_function(AM_5_All,"Q_Na","AM_Na_In","Sodium","volume","mass_biochar")
+#----------------------------------------------------------------------
+
+AM_20_All$Q_K<-Q_function(AM_20_All,"Q_K","AM_K_In","Potassium","volume","mass_biochar")
+
+AM_5_All$Q_K<-Q_function(AM_5_All,"Q_K","AM_K_In","Potassium","volume","mass_biochar")
+#----------------------------------------------------------------------
+
+AM_20_All$Q_Mg<-Q_function(AM_20_All,"Q_Mg","AM_Mg_In","Magnesium","volume","mass_biochar")
+
+AM_5_All$Q_Mg<-Q_function(AM_5_All,"Q_K","AM_K_In","Magnesium","volume","mass_biochar")
+
+#Q<-function(df, Q_col,C_In,C_eq,volume,m_s) {df$Q_col<-((df$C_In-df$C_eq)*df$volume/df$m_s)}
+
+#Q_function(AM_20_All,AM_20_NH4_In,Ammonium,volume,mass_biochar)
+```
+
+## Average and stdev of Replicates
+
+-   Calculating the average and stdev of the replicates an combining them into one dataframe
+
+-   calculating Q_sd as a percent of Q to determine where to cuz off the data
+
+```{r}
+
+#taking the average 
+AM_5_All_Avg<-data.frame(
+ AM_5_All %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+    summarise_at(c("Ox","ID","Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","AM_Na_In","AM_NH4_In","AM_K_In","AM_Mg_In","AM_Ace_In","AM_Cl_In","AM_P_In","AM_S_In","AM_Carb_In","volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg"),mean))
+AM_5_All_Avg
+
+#taking stdev
+AM_5_All_sd<-data.frame(
+ AM_5_All%>%
+    group_by(group = gl(n()/3, 3)) %>% #applies function to every 3 rows
+    summarise_at(c("Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Q_NH4","Q_Na","Q_K","Q_Mg"),sd))
+AM_5_All_sd
+
+colnames(AM_5_All_sd)<-as.character(c("group","Sodium_sd","Ammonium_sd","Potassium_sd","Magnesium_sd","Acetate_sd","Chloride_sd","Phosphate_sd", "Sulfate_sd", "Carbonate_sd","pH_sd", "Ionic_str_sd","Act_NH4_sd","Act_Na_sd","Act_K_sd","AM_Na_Norm_sd","AM_NH4_Norm_sd","AM_K_Norm_sd","AM_Mg_Norm_sd","K_Ace_Norm_sd","AM_Cl_Norm_sd","AM_P_Norm_sd","AM_S_Norm_sd","AM_Carb_Norm_sd","Q_NH4_sd","Q_Na_sd","Q_K_sd","Q_Mg_sd"))
+
+#combining average and std dataframes
+
+
+AM_5_All_Avg_sd<-data.frame(cbind(AM_5_All_Avg,AM_5_All_sd[,-1]))
+
+#Calculating the %percent SD of Q
+
+AM_5_All_Avg_sd$Q_NH4_sd_perc<-(mapply('/', AM_5_All_Avg_sd$Q_NH4_sd,AM_5_All_Avg_sd$Q_NH4))
+AM_5_All_Avg_sd$Q_NH4_sd_perc<-(abs(mapply('*',AM_5_All_Avg_sd$Q_NH4_sd_perc,100)))  
+
+AM_5_All_Avg_sd$Q_Na_sd_perc<-(mapply('/', AM_5_All_Avg_sd$Q_Na_sd,AM_5_All_Avg_sd$Q_Na))
+AM_5_All_Avg_sd$Q_Na_sd_perc<-(abs(mapply('*',AM_5_All_Avg_sd$Q_Na_sd_perc,100)))  
+
+AM_5_All_Avg_sd$Q_K_sd_perc<-(mapply('/', AM_5_All_Avg_sd$Q_K_sd,AM_5_All_Avg_sd$Q_K))
+AM_5_All_Avg_sd$Q_K_sd_perc<-(abs(mapply('*',AM_5_All_Avg_sd$Q_K_sd_perc,100)))  
+
+AM_5_All_Avg_sd$Q_Mg_sd_perc<-(mapply('/', AM_5_All_Avg_sd$Q_Mg_sd,AM_5_All_Avg_sd$Q_Mg))
+AM_5_All_Avg_sd$Q_Mg_sd_perc<-(abs(mapply('*',AM_5_All_Avg_sd$Q_Mg_sd_perc,100)))  
+
+
+#------------------------------------------------------------------------------------------------------------
+
+AM_20_All_Avg<-data.frame(
+ AM_20_All %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+    summarise_at(c("Ox","ID","Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","AM_Na_In","AM_NH4_In","AM_K_In","AM_Mg_In","AM_Ace_In","AM_Cl_In","AM_P_In","AM_S_In","AM_Carb_In","volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg"),mean))
+AM_20_All_Avg
+
+#taking stdev
+AM_20_All_sd<-data.frame(
+ AM_20_All%>%
+    group_by(group = gl(n()/3, 3)) %>% #applies function to every 3 rows
+    summarise_at(c("Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Q_NH4","Q_Na","Q_K","Q_Mg"),sd))
+AM_20_All_sd
+
+colnames(AM_20_All_sd)<-as.character(c("group","Sodium_sd","Ammonium_sd","Potassium_sd","Magnesium_sd","Acetate_sd","Chloride_sd","Phosphate_sd", "Sulfate_sd", "Carbonate_sd","pH_sd", "Ionic_str_sd","Act_NH4_sd","Act_Na_sd","Act_K_sd","AM_Na_Norm_sd","AM_NH4_Norm_sd","AM_K_Norm_sd","AM_Mg_Norm_sd","K_Ace_Norm_sd","AM_Cl_Norm_sd","AM_P_Norm_sd","AM_S_Norm_sd","AM_Carb_Norm_sd","Q_NH4_sd","Q_Na_sd","Q_K_sd","Q_Mg_sd"))
+
+#combining average adn std dataframes
+
+
+AM_20_All_Avg_sd<-data.frame(cbind(AM_20_All_Avg,AM_20_All_sd[,-1]))
+
+#Calculating the %percent SD of Q
+
+AM_20_All_Avg_sd$Q_NH4_sd_perc<-(mapply('/', AM_20_All_Avg_sd$Q_NH4_sd,AM_20_All_Avg_sd$Q_NH4))
+AM_20_All_Avg_sd$Q_NH4_sd_perc<-(abs(mapply('*',AM_20_All_Avg_sd$Q_NH4_sd_perc,100)))  
+
+
+AM_20_All_Avg_sd$Q_Na_sd_perc<-(mapply('/', AM_20_All_Avg_sd$Q_Na_sd,AM_20_All_Avg_sd$Q_Na))
+AM_20_All_Avg_sd$Q_Na_sd_perc<-(abs(mapply('*',AM_20_All_Avg_sd$Q_Na_sd_perc,100)))  
+
+AM_20_All_Avg_sd$Q_K_sd_perc<-(mapply('/', AM_20_All_Avg_sd$Q_K_sd,AM_20_All_Avg_sd$Q_K))
+AM_20_All_Avg_sd$Q_K_sd_perc<-(abs(mapply('*',AM_20_All_Avg_sd$Q_K_sd_perc,100)))  
+
+AM_20_All_Avg_sd$Q_Mg_sd_perc<-(mapply('/', AM_20_All_Avg_sd$Q_Mg_sd,AM_20_All_Avg_sd$Q_Mg))
+AM_20_All_Avg_sd$Q_Mg_sd_perc<-(abs(mapply('*',AM_20_All_Avg_sd$Q_Mg_sd_perc,100)))  
+```
+
+### Converting Ox condition to factors to be able to group for plotting
+
+```{r}
+AM_5_All_Avg_sd$Ox<-as.factor(AM_5_All_Avg$Ox) 
+AM_20_All_Avg_sd$Ox<-as.factor(AM_20_All_Avg$Ox) 
+```
+
+Outliers
+
+```{r}
+#AM_5_All_Avg_sd[2,17]<-NA
+#AM_5_All_Avg_sd[18,17]<-NA
+```
+
+##Plotting Dose vs. Ion Concentration \# Creating a Datadrame with only Ox, Dose, and Normalized concentrations - This allows me to convert to long format and plot everything on one graph
+
+```{r}
+
+AM_5_Ion_Norm<-AM_5_All_Avg_sd[,c("Ox","Dose","pH","Act_NH4","Ionic_str","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm")]
+AM_20_Ion_Norm<-AM_20_All_Avg_sd[,c("Ox","Dose","pH","Act_NH4","Ionic_str","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm")]
+
+AM_5_Ion_Norm$Mg_Norm=NULL 
+
+AM_20_Ion_Norm$Mg_Norm=NULL 
+
+AM_All_Ion_Norm<-rbind(AM_5_Ion_Norm,AM_20_Ion_Norm)
+
+
+AM_All_Ion_Norm_long<-
+ AM_All_Ion_Norm%>%
+  pivot_longer(
+    cols=c("Na_Norm","NH4_Norm","K_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm"),
+    names_to ="Ion_Species",
+    values_to="Norm_Concentration",
+    names_repair="minimal")
+
+AM_All_Ion_Norm_long$Ion_Species<-as.factor(AM_All_Ion_Norm_long$Ion_Species)
+
+```
+
+plotting
+
+```{r}
+coeff<-4
+#the second Y axis is like the first multiplied by 10 (trans=~.*4).
+
+
+AM_5_Ion_Norm_plot<- ggplot(AM_All_Ion_Norm_long,aes(x=Dose,y=Norm_Concentration, color = Ion_Species, na.rm=TRUE)) +
+   geom_point(shape=16, size =4)+
+   geom_line(aes(y=pH / coeff)) + #the value be display in the second variable geom_line() call must be divided by 4 to mimic the range of the first variable.
+    geom_line(aes(y=Ionic_str)) + 
+  facet_wrap(facets = vars(Ox))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Dose(g biochar/L Urine)")+
+  ylab("Normalized Ion Concentration & Ionic Strength (M)")+
+  ggtitle("Ion Concentration by Dose")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+      scale_y_continuous(#expand = c(0,0), limits = c(0,3),
+                         sec.axis = sec_axis(~.*coeff, name="pH"))
+AM_5_Ion_Norm_plot
+```
+
+```{r}
+coeff<-4
+#the second Y axis is like the first multiplied by 10 (trans=~.*4).
+
+
+
+
+AM_5_Ion_Norm_plot<- ggplot(AM_All_Ion_Norm_long,aes(x=Dose,y=Norm_Concentration, color = Ion_Species, na.rm=TRUE)) +
+   geom_point(shape=16, size =4)+
+  #the value be display in the second variable geom_line() call must be divided by 4 to mimic the range of the first variable.
+  facet_wrap(facets = vars(Ox),labeller = labeller(Ox =c("5"="0.13","10"="0.17","15"="0.18","20"="0.20","30"="0.21")))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Dose(g biochar/L Urine)")+
+  ylab("Normalized Ion Concentration")+
+  #ggtitle("Ion Concentration by Dose")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=12),
+        axis.text.y=element_text(size=12),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))
+     
+
+AM_5_Ion_Norm_plot
+```
+
+Plotting pH and Ionic Strength
+
+```{r}
+coeff<-10
+#the second Y axis is like the first multiplied by 10 (trans=~.*4).
+
+AM_All_Ion_Norm_long$Act_NH4_M<-(AM_All_Ion_Norm_long$Act_NH4/1000)
+
+AM_5_Ion_Norm_plot_pH<- ggplot(AM_All_Ion_Norm_long,aes(x=Dose,y=Ionic_str, na.rm=TRUE)) +
+   geom_point(aes(y=pH / coeff),shape=16, size =4,color="chocolate3") + #the value be display in the second variable geom_line() call must be divided by 4 to mimic the range of the first variable.
+  geom_point(shape=16, size =4,color="darkolivegreen")+
+   geom_point(aes(y=Act_NH4_M),shape=17, size =4,color="darkolivegreen") +
+  facet_wrap(facets = vars(Ox),labeller = labeller(Ox =c("5"="0.13","10"="0.17","15"="0.18","20"="0.20","30"="0.21")))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Dose(g biochar/L Urine)")+
+  ylab("Ionic Strength & NH4+ Activity (M)")+
+  #ggtitle("Ion Concentration by Dose")+
+   theme_classic(base_size=18)+
+   #scale_fill_discrete(labels=c('SWP5','SWP7','SS7','PP7','RS5','fff'))+
+  theme(text=element_text(family = "Times"),
+           # aspect.ratio = 1,
+        legend.position='bottom',
+        axis.text.x=element_text(size=12),
+        axis.text.y=element_text(size=12),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+   # theme(axis.title.y=element_text(color="darkolivegreen"))+
+      scale_y_continuous(#expand = c(0,0), limits = c(0,3),
+                         sec.axis = sec_axis(~.*coeff, name="pH"))+
+  theme(axis.text.y.right = element_text(color = "chocolate3"),axis.line.y.right = element_line(color = "chocolate3"),axis.title.y.right = element_text(color = "chocolate3"))+
+   theme(axis.text.y.left = element_text(color = "darkgreen"),axis.line.y.left = element_line(color = "darkgreen"),axis.title.y.left = element_text(color = "darkgreen"))
+AM_5_Ion_Norm_plot_pH
+
+```
+
+Adding Activity
+
+## Subsetting
+
+### Only including data for when percent standard deviation is less than 30%
+
+```{r}
+AM_5_All_Avg_sd_32perc<- AM_5_All_Avg_sd[AM_5_All_Avg_sd$Q_NH4_sd_perc<=32,]  #& (AM_5_All_Avg_sd$Ox!=15), to omit 15
+
+AM_20_All_Avg_sd_32perc<- AM_20_All_Avg_sd[AM_20_All_Avg_sd$Q_NH4_sd_perc<=32,]
+
+```
+
+## Plotting Alk vs. Q
+
+```{r}
+
+AM_5_Plot<- ggplot(AM_5_All_Avg_sd_32perc,aes(x=Act_NH4,y=Q_NH4, color = Ox, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+     geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("AM Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) 
+AM_5_Plot
+
+```
+
+```{r}
+
+AM_20_Plot<- ggplot(AM_20_All_Avg_sd_32perc,aes(x=Act_NH4,y=Q_NH4, color = Ox, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+     geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("AM Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) 
+AM_20_Plot
+
+
+```
+
+### Combining plots (for full dataset)
+
+```{r}
+#combining everything into a dataframe
+AM_All_Avg_sd<-rbind(AM_5_All_Avg_sd,AM_20_All_Avg_sd)
+
+#plotting
+
+AM_Plot<- ggplot(AM_All_Avg_sd,aes(x=Act_NH4,y=Q_NH4, color = Ox, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+     geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("AM Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) 
+AM_Plot
+```
+
+Plotting all data on individual plots to determine where to cut off data
+
+```{r}
+#combining everything into a dataframe
+AM_All_Avg_sd
+
+#plotting
+
+AM_Plot<- ggplot(AM_All_Avg_sd,aes(x=Act_NH4,y=Q_NH4, color = Ox, na.rm=TRUE)) +
+   facet_wrap(facets = vars(Ox))+
+  geom_point(shape=16, size =4)+
+     geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("AM Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) 
+AM_Plot
+```
+
+## Subsetting:
+
+## Semi-arbitrarily removing the data that doesn't fit my idea of isotherms
+
+```{r}
+
+AM_All_Avg_sd_Think<-AM_All_Avg_sd[(AM_All_Avg_sd$ID>=5 &AM_All_Avg_sd$ID<=8)&((AM_All_Avg_sd$Ox==5)|(AM_All_Avg_sd$Ox==10)|(AM_All_Avg_sd$Ox==15)|(AM_All_Avg_sd$Ox==20)|(AM_All_Avg_sd$Ox==30)),]
+View(AM_All_Avg_sd_Think)
+
+```
+
+### Plotting Q for K
+
+```{r}
+AM_K_Plot<- ggplot(AM_All_Avg_sd,aes(x=Act_K,y=Q_K, color = Ox, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+     geom_errorbar(aes(ymin=Q_K-Q_K_sd, ymax=Q_K+Q_K_sd))+
+  geom_errorbarh(aes(xmin=Act_K-Act_K_sd, xmax=Act_K+Act_K_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol K/g biochar")+
+  ggtitle("AM Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) 
+AM_K_Plot
+```
+
+Plotting NH4 for region where isotherm expected to fit
+
+```{r}
+AM_Plot_Think<- ggplot(AM_All_Avg_sd_Think,aes(x=Act_NH4,y=Q_NH4, color = Ox, na.rm=TRUE)) +
+  #  facet_wrap(facets = vars(Ox))+
+  geom_point(shape=16, size =4)+
+     geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("AM Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) 
+   scale_y_continuous(expand = c(2,2), limits = c(-3,20))
+AM_Plot_Think
+
+```
+
+## Combining data and plots for \<32% Error
+
+```{r}
+#combining everything into a dataframe
+AM_All_Avg_sd_32perc<-rbind(AM_5_All_Avg_sd_32perc,AM_20_All_Avg_sd_32perc)
+
+#plotting
+
+AM_Plot_32perc<- ggplot(AM_All_Avg_sd_32perc,aes(x=Act_NH4,y=Q_NH4, color = Ox, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+     geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("AM Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) +
+       scale_x_continuous(expand = c(0.0,0), limits = c(0,350))
+      #  scale_y_continuous(expand = c(0,0), limits = c(-0.1,5))
+AM_Plot_32perc
+```
+
+## Plotting Concentration vs. Q
+
+```{r}
+
+AM_Plot_32perc_Conc<- ggplot(AM_All_Avg_sd_32perc,aes(x=Ammonium,y=Q_NH4, color=factor(Ox, labels=c("0.13","0.17","0.18","0.20","0.21")), na.rm=TRUE)) +
+      guides(color = guide_legend(title = "Elemental O:C"))+
+  geom_point(shape=16, size =4)+
+     geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium-Ammonium_sd, xmax=Ammonium+Ammonium_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mM TAN/g biochar)")+
+  ggtitle("SWP7")+
+    theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+         aspect.ratio = 1,
+        legend.position=c(0.20, .70),
+         legend.title=element_text(size=10), 
+         legend.text=element_text(size=9),
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) +
+    #   scale_x_continuous(expand = c(0.0,0), limits = c(0,350))+
+       scale_color_manual(values=cbbPalette)
+AM_Plot_32perc_Conc
+```
+
+![](http://127.0.0.1:65513/chunk_output/91F610D7BE96C334/9E7A15A1/c55vf0qw7h00s/000011.png)
+
+```{r}
+AM_Plot_32perc_Act<- ggplot(AM_All_Avg_sd_32perc,aes(x=Act_NH4,y=Q_NH4, color=factor(Ox, labels=c("0.13","0.17","0.18","0.20","0.21")), na.rm=TRUE)) +
+    guides(color = guide_legend(title = "Elemental O:C"))+  
+    geom_point(shape=16, size =4)+
+    geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+    geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mM)")+
+  ylab("Q (mM TAN/g biochar)")+
+  ggtitle("SWP7")+
+    theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+         aspect.ratio = 1,
+        legend.position=c(0.20, .70),
+         legend.title=element_text(size=10), 
+         legend.text=element_text(size=9),
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) +
+    #   scale_x_continuous(expand = c(0.0,0), limits = c(0,350))+
+       scale_color_manual(values=cbbPalette)
+AM_Plot_32perc_Act
+```
+
+# Generating Isotherm
+
+### Extracting Act and Q for each Ox condition of \<32% Q-sd subset
+
+```{r}
+Act_5_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==5,15])
+Qe_5_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==5,39])
+
+Act_10_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==10,15])
+Qe_10_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==10,39])
+
+Act_15_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==15,15])
+Qe_15_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==15,39])
+
+Act_20_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==20,15])
+Qe_20_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==20,39])
+
+Act_30_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==30,15])
+Qe_30_NH4<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==30,39])
+
+```
+
+### Extracting Act and Q for each Ox condition of subset I think fits isotherm
+
+```{r}
+Act_5_NH4_Think<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==5,15])
+Qe_5_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==5,39])
+
+Act_10_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==10,15])
+Qe_10_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==10,39])
+
+Act_15_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==15,15])
+Qe_15_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==15,39])
+
+Act_20_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==20,15])
+Qe_20_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==20,39])
+
+Act_30_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==30,15])
+Qe_30_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==30,39])
+
+
+#Conc
+Conc_5_NH4_Think<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==5,5])
+Conc_10_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==10,5])
+
+Conc_15_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==15,5])
+
+Conc_20_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==20,5])
+Conc_30_NH4_Think<<-c(0,AM_All_Avg_sd_Think[AM_All_Avg_sd_Think$Ox==30,5])
+
+```
+
+### Extracting Concentration and Q for each Ox condition of \<32% Q-sd subset
+
+```{r}
+Conc_5<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==5,5])
+
+Conc_10<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==10,5])
+
+
+Conc_15<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==15,5])
+
+Conc_20<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==20,5])
+
+
+Conc_30<-c(0,AM_All_Avg_sd_32perc[AM_All_Avg_sd_32perc$Ox==30,5])
+
+```
+
+### Generating Isotherm: Freundlich w/ Activity
+
+Need to do this to be able to generate the fit parameters
+
+```{r}
+Freundlich_5<-freundlichanalysis (Act_5_NH4, Qe_5_NH4)
+Freundlich_5[[9]]$title<-"Freundlich Isotherm 5"
+
+Freundlich_5_KF<-Freundlich_5$plot_env$pars_KF
+Freundlich_5_n<-Freundlich_5$plot_env$pars_n
+#Q_Freun_5<-Freundlich_5_KF*(Act5_5_NH4^(1/Freundlich_5_n))
+Q_Freun_5<-as.numeric(c(Freundlich_5$plot_env$rsqq$fitted.values))
+
+Q_Freund_5_fun<-function (Act){
+  (Freundlich_5_KF * (Act^(1/Freundlich_5_n)))
+}
+
+Freundlich_5
+#----------------------------------------------------------------------
+Freundlich_10<-freundlichanalysis (Act_10_NH4, Qe_10_NH4)
+Freundlich_10[[9]]$title<-"Freundlich Isotherm 10"
+
+Freundlich_10_KF<-Freundlich_10$plot_env$pars_KF
+Freundlich_10_n<-Freundlich_10$plot_env$pars_n
+#Q_Freun_10<-Freundlich_10_KF*(Act5_10_NH4^(1/Freundlich_10_n))
+Q_Freun_10<-as.numeric(c(Freundlich_10$plot_env$rsqq$fitted.values))
+
+Q_Freund_10_fun<-function (Act){
+  (Freundlich_10_KF * (Act^(1/Freundlich_10_n)))
+}
+
+Freundlich_10
+#-------------------------------------------------------------------------------
+
+Freundlich_15<-freundlichanalysis (Act_15_NH4, Qe_15_NH4)
+Freundlich_15[[9]]$title<-"Freundlich Isotherm 15"
+Freundlich_15_KF<-Freundlich_15$plot_env$pars_KF
+Freundlich_15_n<-Freundlich_15$plot_env$pars_n
+Q_Freun_15<-as.numeric(c(Freundlich_15$plot_env$rsqq$fitted.values))
+
+Q_Freund_15_fun<-function (Act){
+  (Freundlich_15_KF * (Act^(1/Freundlich_15_n)))
+}
+Freundlich_15
+#-------------------------------------------------------------------------------
+Freundlich_20<-freundlichanalysis (Act_20_NH4, Qe_20_NH4)
+Freundlich_20[[9]]$title<-"Freundlich Isotherm 20"
+
+Freundlich_20_KF<-Freundlich_20$plot_env$pars_KF
+Freundlich_20_n<-Freundlich_20$plot_env$pars_n
+#Q_Freun_20<-Freundlich_20_KF*(Act_20_NH4^(1/Freundlich_20_n))
+Q_Freun_20<-as.numeric(c(Freundlich_20$plot_env$rsqq$fitted.values))
+
+Q_Freund_20_fun<-function (Act){
+  (Freundlich_20_KF * (Act^(1/Freundlich_20_n)))
+}
+
+Freundlich_20
+
+
+#-------------------------------------------------------------------------------
+
+Freundlich_30<-freundlichanalysis (Act_30_NH4, Qe_30_NH4)
+Freundlich_30[[9]]$title<-"Freundlich Isotherm 30"
+Freundlich_30_KF<-Freundlich_30$plot_env$pars_KF
+Freundlich_30_n<-Freundlich_30$plot_env$pars_n
+FreundlQ_Freun_30<-as.numeric(c(Freundlich_30$plot_env$rsqq$fitted.values))
+
+Q_Freund_30_fun<-function (Act){
+  (Freundlich_30_KF * (Act^(1/Freundlich_30_n)))
+}
+Freundlich_30
+```
+
+### Generating Isotherm: Freundlich w/ Concentration
+
+```{r}
+Freundlich_5_Conc<-freundlichanalysis (Conc_5, Qe_5_NH4)
+Freundlich_5_Conc[[9]]$title<-"Freundlich Isotherm 5"
+
+Freundlich_5_KF_Conc<-Freundlich_5_Conc$plot_env$pars_KF
+Freundlich_5_n_Conc<-Freundlich_5_Conc$plot_env$pars_n
+#Q_Freun_5<-Freundlich_5_KF*(Conc_5^(1/Freundlich_5_n))
+Q_Freun_5_Conc<-as.numeric(c(Freundlich_5_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_5_fun_Conc<-function (Ammonium){
+  (Freundlich_5_KF_Conc * (Ammonium^(1/Freundlich_5_n_Conc)))
+}
+
+Freundlich_5_Conc
+#----------------------------------------------------------------------
+Freundlich_10_Conc<-freundlichanalysis (Conc_10, Qe_10_NH4)
+Freundlich_10_Conc[[9]]$title<-"Freundlich Isotherm 10"
+
+Freundlich_10_KF_Conc<-Freundlich_10_Conc$plot_env$pars_KF
+Freundlich_10_n_Conc<-Freundlich_10_Conc$plot_env$pars_n
+#Q_Freun_10<-Freundlich_10_KF*(Conc_10^(1/Freundlich_10_n))
+Q_Freun_10_Conc<-as.numeric(c(Freundlich_10_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_10_fun_Conc<-function (Ammonium){
+  (Freundlich_10_KF_Conc * (Ammonium^(1/Freundlich_10_n_Conc)))
+}
+
+Freundlich_10_Conc
+#-------------------------------------------------------------------------------
+Freundlich_15_Conc<-freundlichanalysis (Conc_15, Qe_15_NH4)
+Freundlich_15_Conc[[9]]$title<-"Freundlich Isotherm 25"
+Freundlich_15_KF_Conc<-Freundlich_15_Conc$plot_env$pars_KF
+Freundlich_15_n_Conc<-Freundlich_15_Conc$plot_env$pars_n
+Q_Freun_15_Conc<-as.numeric(c(Freundlich_15_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_15_fun_Conc<-function (Ammonium){
+  (Freundlich_15_KF_Conc * (Ammonium^(1/Freundlich_15_n_Conc)))
+}
+Freundlich_15_Conc
+
+#-------------------------------------------------------------------------------
+
+Freundlich_20_Conc<-freundlichanalysis (Conc_20, Qe_20_NH4)
+Freundlich_20_Conc[[9]]$title<-"Freundlich Isotherm 20"
+
+Freundlich_20_KF_Conc<-Freundlich_20_Conc$plot_env$pars_KF
+Freundlich_20_n_Conc<-Freundlich_20_Conc$plot_env$pars_n
+#Q_Freun_20<-Freundlich_20_KF*(Conc_20^(1/Freundlich_20_n))
+Q_Freun_20_Conc<-as.numeric(c(Freundlich_20_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_20_fun_Conc<-function (Ammonium){
+  (Freundlich_20_KF_Conc * (Ammonium^(1/Freundlich_20_n_Conc)))
+}
+
+Freundlich_20_Conc
+#-------------------------------------------------------------------------------
+
+
+Freundlich_30_Conc<-freundlichanalysis (Conc_30, Qe_30_NH4)
+Freundlich_30_Conc[[9]]$title<-"Freundlich Isotherm 30"
+Freundlich_30_KF_Conc<-Freundlich_30_Conc$plot_env$pars_KF
+Freundlich_30_n_Conc<-Freundlich_30_Conc$plot_env$pars_n
+FreundlQ_Freun_30_Conc<-as.numeric(c(Freundlich_30_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_30_fun_Conc<-function (Ammonium){
+  (Freundlich_30_KF_Conc * (Ammonium^(1/Freundlich_30_n_Conc)))
+}
+Freundlich_30_Conc
+```
+
+### Generating Isotherm: Freundlich for region I expect to fit
+
+```{r}
+Freundlich_5_Think<-freundlichanalysis (Act_5_NH4_Think, Qe_5_NH4_Think)
+Freundlich_5_Think[[9]]$title<-"Freundlich Isotherm 5"
+
+Freundlich_5_KF_Think<-Freundlich_5_Think$plot_env$pars_KF
+Freundlich_5_n_Think<-Freundlich_5_Think$plot_env$pars_n
+#Q_Freun_5<-Freundlich_5_KF*(Act5_5_NH4^(1/Freundlich_5_n))
+Q_Freun_5_Think<-as.numeric(c(Freundlich_5_Think$plot_env$rsqq$fitted.values))
+
+Q_Freund_5_fun_Think<-function (Act){
+  (Freundlich_5_KF_Think * (Act^(1/Freundlich_5_n_Think)))
+}
+
+Freundlich_5_Think
+#----------------------------------------------------------------------
+Freundlich_10_Think<-freundlichanalysis (Act_10_NH4_Think, Qe_10_NH4_Think)
+Freundlich_10_Think[[9]]$title<-"Freundlich Isotherm 10"
+
+Freundlich_10_KF_Think<-Freundlich_10_Think$plot_env$pars_KF
+Freundlich_10_n_Think<-Freundlich_10_Think$plot_env$pars_n
+#Q_Freun_10<-Freundlich_10_KF*(Act5_10_NH4^(1/Freundlich_10_n))
+Q_Freun_10_Think<-as.numeric(c(Freundlich_10_Think$plot_env$rsqq$fitted.values))
+
+Q_Freund_10_fun_Think<-function (Act){
+  (Freundlich_10_KF_Think * (Act^(1/Freundlich_10_n_Think)))
+}
+
+Freundlich_10_Think
+#-------------------------------------------------------------------------------
+
+Freundlich_15_Think<-freundlichanalysis (Act_15_NH4_Think, Qe_15_NH4_Think)
+Freundlich_15_Think[[9]]$title<-"Freundlich Isotherm 15"
+Freundlich_15_KF_Think<-Freundlich_15_Think$plot_env$pars_KF
+Freundlich_15_n_Think<-Freundlich_15_Think$plot_env$pars_n
+Q_Freun_15_Think<-as.numeric(c(Freundlich_15_Think$plot_env$rsqq$fitted.values))
+
+Q_Freund_15_fun_Think<-function (Act){
+  (Freundlich_15_KF_Think * (Act^(1/Freundlich_15_n_Think)))
+}
+Freundlich_15_Think
+#-------------------------------------------------------------------------------
+Freundlich_20_Think<-freundlichanalysis (Act_20_NH4_Think, Qe_20_NH4_Think)
+Freundlich_20_Think[[9]]$title<-"Freundlich Isotherm 20"
+
+Freundlich_20_KF_Think<-Freundlich_20_Think$plot_env$pars_KF
+Freundlich_20_n_Think<-Freundlich_20_Think$plot_env$pars_n
+#Q_Freun_20<-Freundlich_20_KF*(Act_20_NH4^(1/Freundlich_20_n))
+Q_Freun_20_Think<-as.numeric(c(Freundlich_20_Think$plot_env$rsqq$fitted.values))
+
+Q_Freund_20_fun_Think<-function (Act){
+  (Freundlich_20_KF_Think * (Act^(1/Freundlich_20_n_Think)))
+}
+
+Freundlich_20_Think
+
+
+#-------------------------------------------------------------------------------
+
+Freundlich_30_Think<-freundlichanalysis (Act_30_NH4_Think, Qe_30_NH4_Think)
+Freundlich_30_Think[[9]]$title<-"Freundlich Isotherm 30"
+Freundlich_30_KF_Think<-Freundlich_30_Think$plot_env$pars_KF
+Freundlich_30_n_Think<-Freundlich_30_Think$plot_env$pars_n
+FreundlQ_Freun_30_Think<-as.numeric(c(Freundlich_30_Think$plot_env$rsqq$fitted.values))
+
+Q_Freund_30_fun_Think<-function (Act){
+  (Freundlich_30_KF_Think * (Act^(1/Freundlich_30_n_Think)))
+}
+Freundlich_30_Think
+```
+
+CONC
+
+```{r}
+Freundlich_5_Think_Conc<-freundlichanalysis (Conc_5_NH4_Think, Qe_5_NH4_Think)
+Freundlich_5_Think_Conc[[9]]$title<-"Freundlich Isotherm 5"
+
+Freundlich_5_KF_Think_Conc<-Freundlich_5_Think_Conc$plot_env$pars_KF
+Freundlich_5_n_Think_Conc<-Freundlich_5_Think_Conc$plot_env$pars_n
+#Q_Freun_5<-Freundlich_5_KF*(Act5_5_NH4^(1/Freundlich_5_n))
+Q_Freun_5_Think_Conc<-as.numeric(c(Freundlich_5_Think_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_5_fun_Think_Conc<-function (Conc){
+  (Freundlich_5_KF_Think_Conc * (Conc^(1/Freundlich_5_n_Think_Conc)))
+}
+
+Freundlich_5_Think_Conc
+#----------------------------------------------------------------------
+Freundlich_10_Think_Conc<-freundlichanalysis (Conc_10_NH4_Think, Qe_10_NH4_Think)
+Freundlich_10_Think_Conc[[9]]$title<-"Freundlich Isotherm 10"
+
+Freundlich_10_KF_Think_Conc<-Freundlich_10_Think_Conc$plot_env$pars_KF
+Freundlich_10_n_Think_Conc<-Freundlich_10_Think_Conc$plot_env$pars_n
+#Q_Freun_5<-Freundlich_10_KF*(Act5_10_NH4^(1/Freundlich_10_n))
+Q_Freun_10_Think_Conc<-as.numeric(c(Freundlich_10_Think_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_10_fun_Think_Conc<-function (Conc){
+  (Freundlich_10_KF_Think_Conc * (Conc^(1/Freundlich_10_n_Think_Conc)))
+}
+
+Freundlich_10_Think_Conc
+#----------------------------------------------------------------------
+Freundlich_15_Think_Conc<-freundlichanalysis (Conc_15_NH4_Think, Qe_15_NH4_Think)
+Freundlich_15_Think_Conc[[9]]$title<-"Freundlich Isotherm 25"
+
+Freundlich_15_KF_Think_Conc<-Freundlich_15_Think_Conc$plot_env$pars_KF
+Freundlich_15_n_Think_Conc<-Freundlich_15_Think_Conc$plot_env$pars_n
+#Q_Freun_5<-Freundlich_25_KF*(Act5_25_NH4^(1/Freundlich_25_n))
+Q_Freun_15_Think_Conc<-as.numeric(c(Freundlich_15_Think_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_15_fun_Think_Conc<-function (Conc){
+  (Freundlich_15_KF_Think_Conc * (Conc^(1/Freundlich_15_n_Think_Conc)))
+}
+
+Freundlich_15_Think_Conc
+#-------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+
+Freundlich_20_Think_Conc<-freundlichanalysis (Conc_20_NH4_Think, Qe_20_NH4_Think)
+Freundlich_20_Think_Conc[[9]]$title<-"Freundlich Isotherm 10"
+
+Freundlich_20_KF_Think_Conc<-Freundlich_20_Think_Conc$plot_env$pars_KF
+Freundlich_20_n_Think_Conc<-Freundlich_20_Think_Conc$plot_env$pars_n
+#Q_Freun_5<-Freundlich_20_KF*(Act5_20_NH4^(1/Freundlich_20_n))
+Q_Freun_20_Think_Conc<-as.numeric(c(Freundlich_20_Think_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_20_fun_Think_Conc<-function (Conc){
+  (Freundlich_20_KF_Think_Conc * (Conc^(1/Freundlich_20_n_Think_Conc)))
+}
+
+Freundlich_20_Think_Conc
+
+
+#-------------------------------------------------------------------------------
+
+
+Freundlich_30_Think_Conc<-freundlichanalysis (Conc_30_NH4_Think, Qe_30_NH4_Think)
+Freundlich_30_Think_Conc[[9]]$title<-"Freundlich Isotherm 30"
+
+Freundlich_30_KF_Think_Conc<-Freundlich_30_Think_Conc$plot_env$pars_KF
+Freundlich_30_n_Think_Conc<-Freundlich_30_Think_Conc$plot_env$pars_n
+#Q_Freun_5<-Freundlich_30_KF*(Act5_30_NH4^(1/Freundlich_30_n))
+Q_Freun_30_Think_Conc<-as.numeric(c(Freundlich_30_Think_Conc$plot_env$rsqq$fitted.values))
+
+Q_Freund_30_fun_Think_Conc<-function (Conc){
+  (Freundlich_30_KF_Think_Conc * (Conc^(1/Freundlich_30_n_Think_Conc)))
+}
+
+Freundlich_30_Think_Conc
+
+```
+
+# Adding Isotherm fit to Activity Plot
+
+Adding Isotherm Fit to plot where I expect data to fit isotherm
+
+```{r}
+AM_All_Avg_sd_Think$Ox[1]
+
+AM_Plot_Iso_Think<-AM_Plot_Think+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[1])),fun=Q_Freund_5_fun_Think)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[5])),fun=Q_Freund_10_fun_Think)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[9])),fun=Q_Freund_15_fun_Think)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[14])),fun=Q_Freund_20_fun_Think)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[19])),fun=Q_Freund_30_fun_Think)+
+        scale_x_continuous(expand = c(0.0,0), limits = c(0,350))
+  
+AM_Plot_Iso_Think
+```
+
+```{r}
+
+AM_Plot_Iso_Think<-AM_Plot_Think+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[1])),fun=Q_Freund_5_fun_Think)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[5])),fun=Q_Freund_10_fun_Think)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[9])),fun=Q_Freund_15_fun_Think)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[14])),fun=Q_Freund_20_fun_Think)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_Think$Ox[19])),fun=Q_Freund_30_fun_Think)+
+        scale_x_continuous(expand = c(0.0,0), limits = c(0,350))
+  
+AM_Plot_Iso_Think
+```
+
+# Adding Isotherm fit to Concentration Plot
+
+AM_Plot_Iso_Conc
+
+```{r}
+AM_All_Avg_sd_32perc$Ox[1]
+
+AM_Plot_Iso_Conc<-AM_Plot_32perc_Conc+
+  geom_function(aes(color = factor(AM_All_Avg_sd_32perc$Ox[1])),fun=Q_Freund_5_fun_Conc)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_32perc$Ox[4])),fun=Q_Freund_10_fun_Conc)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_32perc$Ox[7])),fun=Q_Freund_15_fun_Conc)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_32perc$Ox[12])),fun=Q_Freund_20_fun_Conc)+
+  geom_function(aes(color = factor(AM_All_Avg_sd_32perc$Ox[19])),fun=Q_Freund_30_fun_Conc)
+      #  scale_x_continuous(expand = c(0.0,0), limits = c(0,550))
+  
+AM_Plot_Iso_Conc
+```
+
+##Calculating Q at a specific Concentration or Activity
+
+```{r}
+
+AM_Q_Conc_350<-data.frame(c(Q_Freund_5_fun_Conc(350),
+                         Q_Freund_10_fun_Conc(350),
+                         Q_Freund_15_fun_Conc(350),
+                         Q_Freund_20_fun_Conc(350),
+                         Q_Freund_30_fun_Conc(350)))
+
+AM_Q_Act_230<-data.frame(c(Q_Freund_5_fun(230),
+                         Q_Freund_10_fun(230),
+                         Q_Freund_15_fun(230),
+                         Q_Freund_20_fun(230),
+                         Q_Freund_30_fun(230)))
+
+#----------------------------------------------------------------------
+
+
+AM_Q_Act_300_Think<-data.frame(c(Q_Freund_5_fun_Think(300),
+                         Q_Freund_10_fun_Think(300),
+                         Q_Freund_15_fun_Think(300),
+                         Q_Freund_20_fun_Think(300),
+                         Q_Freund_30_fun_Think(300)))
+
+
+AM_Q_Conc_300_Think<-data.frame(c(Q_Freund_5_fun_Think_Conc(300),
+                         Q_Freund_10_fun_Think_Conc(300),
+                         Q_Freund_15_fun_Think_Conc(300),
+                         Q_Freund_20_fun_Think_Conc(300),
+                         Q_Freund_30_fun_Think_Conc(300)))
+
+
+
+AM_O_C_EA<-data.frame(c(0.133,
+0.165,
+0.184,
+0.204,
+0.205))
+
+
+
+AM_XPS_C_surv<-c(67.75, 70.86,37.90,62.82,69.04 )
+AM_XPS_O_surv<-c(11.87,12.67,7.27,11.43,14.39)
+AM_XPS_O_C_surv<-((AM_XPS_O_surv/AM_XPS_C_surv)*(12/16))
+AM_XPS_O_C_surv<-data.frame(AM_XPS_O_C_surv)
+
+AM_XPS_C<-c(86.00, 82.48,79.99,84.16,82.72 )
+AM_XPS_O<-c(14.00,17.52,20.01,15.84,17.28 )
+AM_XPS_O_C<-((AM_XPS_O/AM_XPS_C)*(12/16))
+
+
+AM_XPS_O_C<-data.frame(AM_XPS_O_C)
+
+
+AM_Name<-data.frame(as.factor(c("AM",
+                  "AM",
+                  "AM",
+                  "AM",
+                  "AM")))
+
+AM_O_C_vs_Sorp_Dens<-data.frame(cbind(AM_Name,AM_O_C_EA,AM_XPS_O_C,AM_Q_Conc_350,AM_Q_Act_230,AM_Q_Act_300_Think,AM_Q_Conc_300_Think))
+    
+colnames(AM_O_C_vs_Sorp_Dens)<-(c("ID","O_C_EA","O_C_XPS","Q_Conc_350","Q_Act_230","Q_Act_Think_300","Q_Conc_300_Think"))
+
+
+
+```
+
+##Plotting O:C vs. Sorption Density
+
+#For Q based on Activity
+
+```{r}
+AM_O_C_EA_Plot_Act<- ggplot(AM_O_C_vs_Sorp_Dens,aes(x=O_C_EA,y=Q_Act_230, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("O:C (Elemental)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("O:C vs. Sorption Density at Activity of 230 mM")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))
+         #scale_x_continuous(expand = c(0.0,0), limits = c(0,550))
+AM_O_C_EA_Plot_Act
+```
+
+```{r}
+AM_O_C_XPS_Plot_Act<- ggplot(AM_O_C_vs_Sorp_Dens,aes(x=O_C_XPS,y=Q_Act_230, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("O:C (XPS)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("O:C vs. Sorption Density at Activity of 230 mM")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))
+         #scale_x_continuous(expand = c(0.0,0), limits = c(0,550))
+AM_O_C_XPS_Plot_Act
+```
+
+Plotting O:C vs. Sorption Density for fit based on region where I think isotherm is applicable
+
+```{r}
+AM_O_C_EA_Plot_Act_Think<- ggplot(AM_O_C_vs_Sorp_Dens,aes(x=O_C_EA,y=Q_Act_Think_300, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("O:C (Elemental)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("O:C vs. Sorption Density at Activity of 300 mM")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))
+         #scale_x_continuous(expand = c(0.0,0), limits = c(0,550))
+AM_O_C_EA_Plot_Act_Think
+```
+
+##Plotting O:C vs. Sorption Density
+
+#For Q based on Concentration
+
+```{r}
+AM_O_C_Plot_Conc<- ggplot(AM_O_C_vs_Sorp_Dens,aes(x=O_C_EA,y=Q_Conc_350, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("O:C (Elemental)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("O:C vs. Sorption Density at Concentration of 350 mM")+
+   theme_classic(base_size=12)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))
+         #scale_x_continuous(expand = c(0.0,0), limits = c(0,550))
+AM_O_C_Plot_Conc
+```
+
+Combining AK and AM
+
+```{r}
+AM_AK_O_C<-data.frame(rbind(AK_O_C_vs_Sorp_Dens,AM_O_C_vs_Sorp_Dens))
+AM_AK_O_C
+```
+
+Plotting Combined AK & AM Activity
+
+```{r}
+AM_AK_O_C_Plot_Act<- ggplot(AM_AK_O_C,aes(x=O_C_EA,y=Q_Act_Think_300,color=ID, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("O:C (Elemental)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("O:C vs. Sorption Density at Activity of 300 mM")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))
+         #scale_x_continuous(expand = c(0.0,0), limits = c(0,550))
+AM_AK_O_C_Plot_Act
+```
+
+```{r}
+AM_AK_O_C_XPS_Plot_Act<- ggplot(AM_AK_O_C,aes(x=O_C_EA,y=Q_Act_230,color=ID, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("O:C (XPS)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("O:C vs. Sorption Density at Activity of 230 mM")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))
+         #scale_x_continuous(expand = c(0.0,0), limits = c(0,550))
+AM_AK_O_C_XPS_Plot_Act
+```
+
+Plotting Combined AK & AM Concentration
+
+```{r}
+AK_AM_OC_Plot<- ggplot(AM_AK_O_C,aes(x=O_C_EA,y=Q_Conc_300_Think,color=ID, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("O:C (Elemental)")+
+  ylab("Q (mmol NH4/g biochar")+
+  ggtitle("O:C vs. Sorption Density at Concentration of 400 mM")+
+   theme_classic(base_size=12)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))
+AK_AM_OC_Plot
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,343 @@
+---
+title: "All_Isotherms"
+output: html_document
+date: "2023-05-23"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+
+```{r}
+
+
+libs_1<-c("tidyverse","knitr","psych","reshape2","rmarkdown")
+
+#data manipulation/exploration
+libs_2<-c("readxl","readr","tidyr","GGally","naniar","readr")
+
+
+# plotting
+libs_3<-c("ggplot2","viridis","ggpubr","cowplot")
+
+#ggpubr = package for publishing
+#cowplot=  #to create compounded figures
+
+#tables
+libs_4<-c("dplyr","stargazer","xlsx","ggplot2","scales","extrafont","writexl")
+
+
+#isothermFitting
+#install.packages(PUPAIM)
+library("PUPAIM")
+
+#install.packages("devtools")
+
+
+
+libs<-c(libs_1,libs_2,libs_3,libs_4)
+
+lapply(libs,require, character.only=TRUE)
+```
+
+```{r}
+
+AK<-readRDS("AK.RDS")
+AL<-readRDS("AL.RDS")
+AM<-readRDS("AM.RDS")
+AN<-readRDS("AN.RDS")
+AO<-readRDS("AO.RDS")
+
+#Renaming all the columns so I could rbind them later - they need to have the same name for this to be possible. 
+
+new_column_names<-c("group","H2O2_conc","Sample_ID","Na_Conc", "NH4_Conc","K_Conc", "Mg_Conc","Ace_Conc","Cl_Conc","PO4_Conc","SO4_Conc","Carb_Conc","pH","Ionic_str","NH4_Act","Na_Act","K_Act", "Na_In", "NH4_In", "K_In","Mg_In","Ace_In", "Cl_In", "PO4_In", "S_In", "Carb_In", "volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm", "Cl_Norm", "PO4_Norm","S_Norm", "Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg", "Na_Conc_sd", "NH4_Conc_sd","K_Conc_sd","Mg_Conc_sd","Ace_Conc_sd", "Cl_Conc_sd", "PO4_Norm_sd","SO4_Norm_sd","Carb_Conc_sd","pH_sd", "Ionic_str_sd","NH4_Act_sd", "Na_Act_sd", "K_Act_sd","Na_Norm_sd", "NH4_Norm_sd", "K_Norm_sd","Mg_Norm_sd", "Ace_Norm_sd", "Cl_Norm_sd", "P_Norm_sd", "S_Norm_sd","Carb_Norm_sd", "Q_NH4_sd", "Q_Na_sd","Q_K_sd","Q_Mg_sd", "Q_NH4_sd_perc","Q_Na_sd_perc","Q_K_sd_perc", "Q_Mg_sd_perc","OC","Type")
+
+names(AK)<-new_column_names
+names(AL)<-new_column_names
+names(AM)<-new_column_names
+names(AN)<-new_column_names
+names(AO)<-new_column_names
+
+#combining all the dataframes 
+ALL_Biochars<-rbind(AK,AL,AM,AN,AO)
+
+#Adding XPS O:C
+
+AK_XPS_C<-c(80.93, 80.23,1, 79.41, 78.41, 76.10)
+AK_XPS_O<-c(19.07,19.77,1, 20.59,21.59, 23.90 )
+AK_XPS_O_C<-((AK_XPS_O/AK_XPS_C)*(12/16))
+AK_XPS_O_C<-rep(AK_XPS_O_C,each=8)
+
+AL_XPS_C<-c(63.49,56.03,46.22)
+AL_XPS_O<-c(36.51,43.97,53.78)
+AL_XPS_O_C<-((AL_XPS_O/AL_XPS_C)*(12/16))
+AL_XPS_O_C<-rep(AL_XPS_O_C,each=8)
+
+
+AM_XPS_C<-c(86.00, 82.48,79.99,84.16,82.72 )
+AM_XPS_O<-c(14.00,17.52,20.01,15.84,17.28 )
+AM_XPS_O_C<-((AM_XPS_O/AM_XPS_C)*(12/16))
+AM_XPS_O_C<-rep(AM_XPS_O_C,each=8)
+
+AN_XPS_C<-c(82.52)
+AN_XPS_O<-c(17.48)
+AN_XPS_O_C<-((AN_XPS_O/AN_XPS_C)*(12/16))
+AN_XPS_O_C<-rep(AN_XPS_O_C,each=8)
+
+AO_XPS_C<-c(81.50,72.77,77.55,79.83)
+AO_XPS_O<-c(18.50,27.23,22.45,20.17)
+AO_XPS_O_C<-((AO_XPS_O/AO_XPS_C)*(12/16))
+AO_XPS_O_C<-rep(AO_XPS_O_C,each=8)
+
+XPS_OC<-c(AK_XPS_O_C,AL_XPS_O_C,AM_XPS_O_C,AN_XPS_O_C,AO_XPS_O_C)
+ALL_Biochars$XPS_OC<-XPS_OC
+
+#removing AK 15 because it's erroneous 
+
+ALL_Biochars<-ALL_Biochars%>%
+  filter(Type!="AO" | H2O2_conc!="15")
+
+#converting O:C into factor
+#ALL_Biochars$OC<-as.factor(ALL_Biochars$OC)
+
+```
+
+## Plotting
+
+```{r}
+
+ALL_Biochars$Dose<-round(ALL_Biochars$Dose, 2)
+
+#ALL_Biochars$Dose<-as.factor(ALL_Biochars$Dose)
+
+Q_Conc_Plot<- ggplot(ALL_Biochars,aes(x=NH4_Conc,y=Q_NH4, color = OC, shape=Dose, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+    #geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+   # geom_errorbarh(aes(xmin=NH4_Conc-NH4_Conc_sd, xmax=NH4_Conc+NH4_Conc_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mmol)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+  scale_color_gradient(low = "blue", high = "red")
+Q_Conc_Plot
+```
+
+```{r}
+
+Q_Conc_Plot_2<- Q_Conc_Plot+
+  scale_x_continuous(expand = c(0.0,0), limits = c(100,450))+
+  scale_y_continuous(expand = c(0,0), limits = c(-0.1,3))
+Q_Conc_Plot_2
+
+```
+
+```{r}
+
+Q_Conc_Plot_3<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Q_NH4, color = OC, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol NH4/g biochar")+
+  #ggtitle("Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+  scale_color_gradient(low = "blue", high = "red")
+Q_Conc_Plot_3
+```
+
+```{r}
+Q_Conc_Plot_3b<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Q_NH4, color = XPS_OC, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol NH4/g biochar")+
+  #ggtitle("Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+  scale_color_gradient(low = "blue", high = "red")
+Q_Conc_Plot_3b
+```
+
+```{r}
+
+Q_Conc_Plot_4<- Q_Conc_Plot_3+
+  scale_x_continuous(expand = c(0.0,0), limits = c(50,350))+
+  scale_y_continuous(expand = c(0,0), limits = c(-0.1,4.5))
+Q_Conc_Plot_4
+```
+
+```{r}
+
+Q_Conc_Plot_5<- ggplot(ALL_Biochars,aes(x=Dose,y=Q_NH4, color = OC, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+  geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Dose (g biochar/L Urine)")+
+  ylab("Q (mmol NH4/g biochar")+
+  #ggtitle("Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+  scale_color_gradient(low = "blue", high = "red")
+Q_Conc_Plot_5
+
+```
+
+```{r}
+
+Q_Conc_Plot_6<- Q_Conc_Plot_5+
+  scale_x_continuous(expand = c(0.0,0), limits = c(15,460))+
+  scale_y_continuous(expand = c(0,0), limits = c(-0.1,4.7))
+Q_Conc_Plot_6
+```
+
+```{r}
+
+ALL_Biochars$OC<-as.numeric(as.character(ALL_Biochars$OC))
+```
+
+```{r}
+Q_Conc_Plot_7<- ggplot(ALL_Biochars,aes(x=Dose,y=Q_NH4, color = OC, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+    # geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+ # geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Dose (g biochar/L Urine)")+
+  ylab("Q (mmol NH4/g biochar")+
+ # ggtitle("Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+  scale_color_gradient(low = "blue", high = "red")
+Q_Conc_Plot_7
+```
+
+```{r}
+Q_Conc_Plot_7b<- ggplot(ALL_Biochars,aes(x=Dose,y=Q_NH4, color = XPS_OC, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+    # geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+ # geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Dose (g biochar/L Urine)")+
+  ylab("Q (mmol NH4/g biochar")+
+ # ggtitle("Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+  scale_color_gradient(low = "blue", high = "red")
+Q_Conc_Plot_7b
+```
+
+```{r}
+ALL_Biochars$Dose<-as.numeric(ALL_Biochars$Dose)
+
+Q_Conc_Plot_9<- ggplot(ALL_Biochars,aes(x=OC,y=Q_NH4,color=NH4_Conc, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+    # geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+ # geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  facet_wrap(facets = vars(Dose))+
+  xlab("O:C")+
+  ylab("Q (mmol NH4/g biochar")+
+ # ggtitle("Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+  scale_color_gradient(low = "green", high = "purple")
+Q_Conc_Plot_9
+```
+
+```{r}
+
+ALL_Biochars$Dose<-as.factor(ALL_Biochars$Dose)
+
+Q_Conc_Plot_8<- ggplot(ALL_Biochars,aes(x=Dose,y=Q_NH4, color = OC, na.rm=TRUE)) +
+  geom_boxplot()+
+  geom_point()+
+    # geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+ # geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Dose (g biochar/L Urine)")+
+  ylab("Q (mmol NH4/g biochar")+
+ # ggtitle("Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1))+
+  scale_color_gradient(low = "blue", high = "red")
+Q_Conc_Plot_8
+
+```
+
+```{r}
+
+
+```
