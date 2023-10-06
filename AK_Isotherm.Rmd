@@ -566,11 +566,11 @@ AK_5_10_15_for_PHREEQC<-data.frame(AK_5_Ion_All[,c(1,5:14)])
 
 colnames(AK_5_10_15_for_PHREEQC)=c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
 
-write.table(AK_5_10_15_for_PHREEQC,"/Users/soliverchefusi/OneDrive/Desktop/Fusi/Sorption/Final_Data/Activities/AK_5_10_15_for_PHREEQC.txt", sep = "\t",
+write.table(AK_5_10_15_for_PHREEQC,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/AK_5_10_15_for_PHREEQC.txt", sep = "\t",
             row.names = FALSE, col.names = FALSE)
 
 
-write_xlsx (AK_5_Ion_All,"/Users/soliverchefusi/OneDrive/Desktop/Fusi/Sorption/Final_Data/Activities/AK_5_10_15_for_PHREEQC.xlsx")
+write_xlsx (AK_5_Ion_All,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/AK_5_10_15_for_PHREEQC.xlsx")
 
 
 #----------------------------------------------------------------------
@@ -590,7 +590,7 @@ colnames(AK_20_Ion_All)<-as.character(c("PHREEQC_number",'Ox','ID','Rep','Sodium
 AK_20_25_30_for_PHREEQC<-data.frame(AK_20_Ion_All[,c(1,5:14)])
 colnames(AK_20_25_30_for_PHREEQC)<-c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
 
-write.table(AK_20_25_30_for_PHREEQC,"/Users/soliverchefusi/OneDrive/Desktop/Fusi/Sorption/Final_Data/Activities/AK_20_25_30_for_PHREEQC.txt", sep = "\t",
+write.table(AK_20_25_30_for_PHREEQC,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/AK_20_25_30_for_PHREEQC.txt", sep = "\t",
             row.names = FALSE, col.names = FALSE)
 
 ```
@@ -758,6 +758,29 @@ AK_20_All$Q_Mg<-Q_function(AK_20_All,"Q_Mg","AK_Mg_In","Magnesium","volume","mas
 
 AK_5_All$Q_Mg<-Q_function(AK_5_All,"Q_Mg","AK_Mg_In","Magnesium","volume","mass_biochar")
 
+
+#October 2023; adding Q for Anions
+
+AK_20_All$Q_Cl<-Q_function(AK_20_All,"Q_Cl","AK_Cl_In","Chloride","volume","mass_biochar")
+
+AK_5_All$Q_Cl<-Q_function(AK_5_All,"Q_Cl","AK_Cl_In","Chloride","volume","mass_biochar")
+#----------------------------------------------------------------------
+
+AK_20_All$Q_PO4<-Q_function(AK_20_All,"Q_PO4","AK_P_In","Phosphate","volume","mass_biochar")
+
+AK_5_All$Q_PO4<-Q_function(AK_5_All,"Q_PO4","AK_P_In","Phosphate","volume","mass_biochar")
+#----------------------------------------------------------------------
+
+AK_20_All$Q_S<-Q_function(AK_20_All,"Q_S","AK_S_In","Sulfate","volume","mass_biochar")
+
+AK_5_All$Q_S<-Q_function(AK_5_All,"Q_S","AK_S_In","Sulfate","volume","mass_biochar")
+#----------------------------------------------------------------------
+
+AK_20_All$Q_Ace<-Q_function(AK_20_All,"Q_Ace","AK_Ace_In","Acetate","volume","mass_biochar")
+
+AK_5_All$Q_Ace<-Q_function(AK_5_All,"Q_Ace","AK_Ace_In","Acetate","volume","mass_biochar")
+
+
 #Q<-function(df, Q_col,C_In,C_eq,volume,m_s) {df$Q_col<-((df$C_In-df$C_eq)*df$volume/df$m_s)}
 
 #Q_function(AK_20_All,AK_20_NH4_In,Ammonium,volume,mass_biochar)
@@ -775,17 +798,17 @@ AK_5_All$Q_Mg<-Q_function(AK_5_All,"Q_Mg","AK_Mg_In","Magnesium","volume","mass_
 AK_5_All_Avg<-data.frame(
  AK_5_All %>%
     group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
-    summarise_at(c("Ox","ID","Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","AK_Na_In","AK_NH4_In","AK_K_In","AK_Mg_In","AK_Ace_In","AK_Cl_In","AK_P_In","AK_S_In","AK_Carb_In","volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg"),mean))
+    summarise_at(c("Ox","ID","Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","AK_Na_In","AK_NH4_In","AK_K_In","AK_Mg_In","AK_Ace_In","AK_Cl_In","AK_P_In","AK_S_In","AK_Carb_In","volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg","Q_Cl","Q_PO4","Q_S","Q_Ace"),mean))
 AK_5_All_Avg
 
 #taking stdev
 AK_5_All_sd<-data.frame(
  AK_5_All%>%
     group_by(group = gl(n()/3, 3)) %>% #applies function to every 3 rows
-    summarise_at(c("Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Q_NH4","Q_Na","Q_K","Q_Mg"),sd))
+    summarise_at(c("Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Q_NH4","Q_Na","Q_K","Q_Mg","Q_Cl","Q_PO4","Q_S","Q_Ace"),sd))
 AK_5_All_sd
 
-colnames(AK_5_All_sd)<-as.character(c("group","Sodium_sd","Ammonium_sd","Potassium_sd","Magnesium_sd","Acetate_sd","Chloride_sd","Phosphate_sd", "Sulfate_sd", "Carbonate_sd","pH_sd", "Ionic_str_sd","Act_NH4_sd","Act_Na_sd","Act_K_sd","AK_Na_Norm_sd","AK_NH4_Norm_sd","AK_K_Norm_sd","AK_Mg_Norm_sd","K_Ace_Norm_sd","AK_Cl_Norm_sd","AK_P_Norm_sd","AK_S_Norm_sd","AK_Carb_Norm_sd","Q_NH4_sd","Q_Na_sd","Q_K_sd","Q_Mg_sd"))
+colnames(AK_5_All_sd)<-as.character(c("group","Sodium_sd","Ammonium_sd","Potassium_sd","Magnesium_sd","Acetate_sd","Chloride_sd","Phosphate_sd", "Sulfate_sd", "Carbonate_sd","pH_sd", "Ionic_str_sd","Act_NH4_sd","Act_Na_sd","Act_K_sd","AK_Na_Norm_sd","AK_NH4_Norm_sd","AK_K_Norm_sd","AK_Mg_Norm_sd","K_Ace_Norm_sd","AK_Cl_Norm_sd","AK_P_Norm_sd","AK_S_Norm_sd","AK_Carb_Norm_sd","Q_NH4_sd","Q_Na_sd","Q_K_sd","Q_Mg_sd","Q_Cl_sd","Q_PO4_sd","Q_S_sd","Q_Ace_sd"))
 
 #combining average and std dataframes
 
@@ -806,22 +829,36 @@ AK_5_All_Avg_sd$Q_K_sd_perc<-(abs(mapply('*',AK_5_All_Avg_sd$Q_K_sd_perc,100)))
 AK_5_All_Avg_sd$Q_Mg_sd_perc<-(mapply('/', AK_5_All_Avg_sd$Q_Mg_sd,AK_5_All_Avg_sd$Q_Mg))
 AK_5_All_Avg_sd$Q_Mg_sd_perc<-(abs(mapply('*',AK_5_All_Avg_sd$Q_Mg_sd_perc,100))) 
 
+#October 2023; adding Q for Anions
+AK_5_All_Avg_sd$Q_Cl_sd_perc<-(mapply('/', AK_5_All_Avg_sd$Q_Cl_sd,AK_5_All_Avg_sd$Q_Cl))
+AK_5_All_Avg_sd$Q_Cl_sd_perc<-(abs(mapply('*',AK_5_All_Avg_sd$Q_Cl_sd_perc,100)))  
+
+AK_5_All_Avg_sd$Q_PO4_sd_perc<-(mapply('/', AK_5_All_Avg_sd$Q_PO4_sd,AK_5_All_Avg_sd$Q_PO4))
+AK_5_All_Avg_sd$Q_PO4_sd_perc<-(abs(mapply('*',AK_5_All_Avg_sd$Q_PO4_sd_perc,100))) 
+
+AK_5_All_Avg_sd$Q_S_sd_perc<-(mapply('/', AK_5_All_Avg_sd$Q_S_sd,AK_5_All_Avg_sd$Q_S))
+AK_5_All_Avg_sd$Q_S_sd_perc<-(abs(mapply('*',AK_5_All_Avg_sd$Q_S_sd_perc,100))) 
+
+AK_5_All_Avg_sd$Q_Ace_sd_perc<-(mapply('/', AK_5_All_Avg_sd$Q_Ace_sd,AK_5_All_Avg_sd$Q_Ace))
+AK_5_All_Avg_sd$Q_Ace_sd_perc<-(abs(mapply('*',AK_5_All_Avg_sd$Q_Ace_sd_perc,100))) 
+
 #------------------------------------------------------------------------------------------------------------
 
 AK_20_All_Avg<-data.frame(
  AK_20_All %>%
     group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
-    summarise_at(c("Ox","ID","Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","AK_Na_In","AK_NH4_In","AK_K_In","AK_Mg_In","AK_Ace_In","AK_Cl_In","AK_P_In","AK_S_In","AK_Carb_In","volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg"),mean))
+    summarise_at(c("Ox","ID","Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","AK_Na_In","AK_NH4_In","AK_K_In","AK_Mg_In","AK_Ace_In","AK_Cl_In","AK_P_In","AK_S_In","AK_Carb_In","volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg","Q_Cl","Q_PO4","Q_S","Q_Ace"),mean))
 AK_20_All_Avg
 
 #taking stdev
 AK_20_All_sd<-data.frame(
  AK_20_All%>%
     group_by(group = gl(n()/3, 3)) %>% #applies function to every 3 rows
-    summarise_at(c("Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Q_NH4","Q_Na","Q_K","Q_Mg"),sd))
+    summarise_at(c("Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Q_NH4","Q_Na","Q_K","Q_Mg","Q_Cl","Q_PO4","Q_S","Q_Ace"),sd))
 AK_20_All_sd
 
-colnames(AK_20_All_sd)<-as.character(c("group","Sodium_sd","Ammonium_sd","Potassium_sd","Magnesium_sd","Acetate_sd","Chloride_sd","Phosphate_sd", "Sulfate_sd", "Carbonate_sd","pH_sd", "Ionic_str_sd","Act_NH4_sd","Act_Na_sd","Act_K_sd","AK_Na_Norm_sd","AK_NH4_Norm_sd","AK_K_Norm_sd","AK_Mg_Norm_sd","K_Ace_Norm_sd","AK_Cl_Norm_sd","AK_P_Norm_sd","AK_S_Norm_sd","AK_Carb_Norm_sd","Q_NH4_sd","Q_Na_sd","Q_K_sd","Q_Mg_sd"))
+colnames(AK_20_All_sd)<-as.character(c("group","Sodium_sd","Ammonium_sd","Potassium_sd","Magnesium_sd","Acetate_sd","Chloride_sd","Phosphate_sd", "Sulfate_sd", "Carbonate_sd","pH_sd", "Ionic_str_sd","Act_NH4_sd","Act_Na_sd","Act_K_sd","AK_Na_Norm_sd","AK_NH4_Norm_sd","AK_K_Norm_sd","AK_Mg_Norm_sd","K_Ace_Norm_sd","AK_Cl_Norm_sd","AK_P_Norm_sd","AK_S_Norm_sd","AK_Carb_Norm_sd","Q_NH4_sd","Q_Na_sd","Q_K_sd","Q_Mg_sd","Q_Cl_sd","Q_PO4_sd","Q_S_sd","Q_Ace_sd"))
+
 
 #combining average adn std dataframes
 
@@ -842,6 +879,19 @@ AK_20_All_Avg_sd$Q_K_sd_perc<-(abs(mapply('*',AK_20_All_Avg_sd$Q_K_sd_perc,100))
 AK_20_All_Avg_sd$Q_Mg_sd_perc<-(mapply('/', AK_20_All_Avg_sd$Q_Mg_sd,AK_20_All_Avg_sd$Q_Mg))
 AK_20_All_Avg_sd$Q_Mg_sd_perc<-(abs(mapply('*',AK_20_All_Avg_sd$Q_Mg_sd_perc,100)))  
 
+#October 2023; adding Q for Anions
+AK_20_All_Avg_sd$Q_Cl_sd_perc<-(mapply('/', AK_20_All_Avg_sd$Q_Cl_sd,AK_20_All_Avg_sd$Q_Cl))
+AK_20_All_Avg_sd$Q_Cl_sd_perc<-(abs(mapply('*',AK_20_All_Avg_sd$Q_Cl_sd_perc,100)))  
+
+AK_20_All_Avg_sd$Q_PO4_sd_perc<-(mapply('/', AK_20_All_Avg_sd$Q_PO4_sd,AK_20_All_Avg_sd$Q_PO4))
+AK_20_All_Avg_sd$Q_PO4_sd_perc<-(abs(mapply('*',AK_20_All_Avg_sd$Q_PO4_sd_perc,100))) 
+
+AK_20_All_Avg_sd$Q_S_sd_perc<-(mapply('/', AK_20_All_Avg_sd$Q_S_sd,AK_20_All_Avg_sd$Q_S))
+AK_20_All_Avg_sd$Q_S_sd_perc<-(abs(mapply('*',AK_20_All_Avg_sd$Q_S_sd_perc,100))) 
+
+AK_20_All_Avg_sd$Q_Ace_sd_perc<-(mapply('/', AK_20_All_Avg_sd$Q_Ace_sd,AK_20_All_Avg_sd$Q_Ace))
+AK_20_All_Avg_sd$Q_Ace_sd_perc<-(abs(mapply('*',AK_20_All_Avg_sd$Q_Ace_sd_perc,100))) 
+
 ```
 
 ### Converting Ox condition to factors to be able to group for plotting
@@ -849,6 +899,17 @@ AK_20_All_Avg_sd$Q_Mg_sd_perc<-(abs(mapply('*',AK_20_All_Avg_sd$Q_Mg_sd_perc,100
 ```{r}
 AK_5_All_Avg_sd$Ox<-as.factor(AK_5_All_Avg$Ox) 
 AK_20_All_Avg_sd$Ox<-as.factor(AK_20_All_Avg$Ox) 
+
+```
+
+## Oct 2023 Edit
+
+Resaving file as RDS to work on in separate .rmd file
+
+```{r}
+AK_All_Avg<-rbind(AK_5_All_Avg_sd,AK_20_All_Avg_sd)
+saveRDS(AK_All_Avg, file = "AK_ALL.RDS")
+
 ```
 
 Outliers
@@ -869,6 +930,9 @@ AK_20_Ion_Norm<-AK_20_All_Avg_sd[,c("Ox","Dose","pH","Act_NH4","Ionic_str","Na_N
 AK_All_Ion_Norm<-rbind(AK_5_Ion_Norm,AK_20_Ion_Norm)
 
 
+```
+
+```{r}
 AK_All_Ion_Norm_long<-
  AK_All_Ion_Norm%>%
   pivot_longer(
@@ -1991,6 +2055,13 @@ AK_O_C_EA<-data.frame(c(0.197,
 0.283,
 0.302))
 
+
+0.197
+0.234
+0.245
+0.272
+0.283
+0.302
 
 AK_XPS_C<-c(80.93, 80.23, 79.41, 78.41, 76.10)
 AK_XPS_O<-c(19.07,19.77, 20.59,21.59, 23.90 )
