@@ -3,7 +3,7 @@ title: "All_Isotherms"
 output: html_document
 date: "2023-05-23"
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -61,7 +61,31 @@ AO_ALL<-readRDS("AO_ALL.rds")
 
 #Renaming all the columns so I could rbind them later - they need to have the same name for this to be possible. 
 
-new_column_names<-c("group","H2O2_conc","Sample_ID","Na_Conc", "NH4_Conc","K_Conc", "Mg_Conc","Ace_Conc","Cl_Conc","PO4_Conc","SO4_Conc","Carb_Conc","pH","Ionic_str","NH4_Act","Na_Act","K_Act", "Na_In", "NH4_In", "K_In","Mg_In","Ace_In", "Cl_In", "PO4_In", "S_In", "Carb_In", "volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm", "Cl_Norm", "PO4_Norm","S_Norm", "Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg", "Q_Cl","Q_PO4","Q_S","Q_Ace","Na_Conc_sd", "NH4_Conc_sd","K_Conc_sd","Mg_Conc_sd","Ace_Conc_sd", "Cl_Conc_sd", "PO4_Norm_sd","SO4_Norm_sd","Carb_Conc_sd","pH_sd", "Ionic_str_sd","NH4_Act_sd", "Na_Act_sd", "K_Act_sd","Na_Norm_sd", "NH4_Norm_sd", "K_Norm_sd","Mg_Norm_sd", "Ace_Norm_sd", "Cl_Norm_sd", "P_Norm_sd", "S_Norm_sd","Carb_Norm_sd", "Q_NH4_sd", "Q_Na_sd","Q_K_sd","Q_Mg_sd", "Q_Cl_sd", "Q_PO4_sd", "Q_S_sd", "Q_Ace_sd","Q_NH4_sd_perc","Q_Na_sd_perc","Q_K_sd_perc", "Q_Mg_sd_perc","Q_Cl_sd_perc","Q_PO4_sd_perc","Q_S_sd_perc","Q_Ace_sd_perc")  
+new_column_names<-c("group","H2O2_conc","Sample_ID",
+                    "Na_Conc", "NH4_Conc","K_Conc", "Mg_Conc",
+                    "Ace_Conc","Cl_Conc","PO4_Conc","SO4_Conc","Carb_Conc",
+                    "pH","Ionic_str","NH4_Act","Na_Act","K_Act",
+                    "NH4_In", "Mg_In","K_In","Na_In",
+                    "NH4_In_sd","Mg_In_sd","K_In_sd", "Na_In_sd",
+                    "Ace_In","Carb_In", "Cl_In","PO4_In","S04_In",
+                    "Ace_In_sd","Carb_In_sd","Cl_In_sd","PO4_In_sd","SO4_In_sd",
+                    "volume","mass_biochar",
+                    "Na_ctrl","NH4_ctrl","K_ctrl","Mg_ctrl",
+                    "Na_ctrl_sd" ,"NH4_ctrl_sd","K_ctrl_sd","Mg_ctrl_sd",
+                    "Ace_ctrl", "Cl_ctrl", "PO4_ctrl","SO4_ctrl", "Carb_ctrl",
+                    "Ace_ctrl_sd","Cl_ctrl_sd","PO4_ctrl_sd", "SO4_ctrl_sd", "Carb_ctrl_sd",
+                    "Na_Norm", "NH4_Norm", "K_Norm", "Mg_Norm",
+                    "Ace_Norm", "Cl_Norm", "PO4_Norm","SO4_Norm", "Carb_Norm",
+                    "Dose",
+                    "Q_NH4","Q_Na","Q_K","Q_Mg", "Q_Cl","Q_PO4","Q_SO4","Q_Ace",
+                    "Na_Conc_sd", "NH4_Conc_sd","K_Conc_sd","Mg_Conc_sd",
+                    "Ace_Conc_sd","Cl_Conc_sd","PO4_Conc_sd","SO4_Conc_sd","Carb_Conc_sd",
+                    "pH_sd", "Ionic_str_sd","NH4_Act_sd", "Na_Act_sd", "K_Act_sd",
+                    "Na_Norm_sd", "NH4_Norm_sd", "K_Norm_sd","Mg_Norm_sd",
+                    "Ace_Norm_sd", "Cl_Norm_sd", "PO4_Norm_sd", "SO4_Norm_sd","Carb_Norm_sd",
+                    "Q_NH4_sd", "Q_Na_sd","Q_K_sd","Q_Mg_sd", "Q_Cl_sd", "Q_PO4_sd", "Q_SO4_sd",
+                    "Q_Ace_sd","Q_NH4_sd_perc","Q_Na_sd_perc","Q_K_sd_perc", "Q_Mg_sd_perc",
+                    "Q_Cl_sd_perc","Q_PO4_sd_perc","Q_S_sd_perc","Q_Ace_sd_perc")  
                     
                     #,"OC","Type")
 
@@ -159,14 +183,14 @@ ALL_Biochars$XPS_OC<-XPS_OC
 # ALL_Biochars<-ALL_Biochars%>%
 #   filter(Type!="AO" | H2O2_conc!="15")
 # 
-# ALL_Biochars<-ALL_Biochars%>%
-#   filter(Type!="AL")
-# 
-# ALL_Biochars<-ALL_Biochars%>%
-#   filter(Q_NH4>0)
-# 
-# ALL_Biochars<-ALL_Biochars%>%
-#   filter(NH4_Act>0)
+ALL_Biochars<-ALL_Biochars%>%
+  filter(Type!="AL")
+
+ALL_Biochars<-ALL_Biochars%>%
+  filter(Q_NH4>0)
+
+ALL_Biochars<-ALL_Biochars%>%
+  filter(NH4_Act>0)
 
 #converting O:C into factor
 #ALL_Biochars$OC<-as.factor(ALL_Biochars$OC)
@@ -608,7 +632,7 @@ Norm_PO4_plot
 Sulfate
 
 ```{r}
-Norm_S_plot<- ggplot(ALL_Biochars,aes(x=Dose,y=S_Norm, color = OC, na.rm=TRUE)) +
+Norm_S_plot<- ggplot(ALL_Biochars,aes(x=Dose,y=SO4_Norm, color = OC, na.rm=TRUE)) +
    geom_point()+ #shape=16, size =4)+
   # geom_point(aes(y=PO4_Norm,color = OC)) + 
   # geom_point(aes(y=S_Norm, color = OC)) + 
@@ -644,11 +668,11 @@ since error bars don't work well with stacked plots
 
 Norm_<-
   ALL_Biochars%>%
-  select(c("OC","Q_NH4", "Q_Na", "Q_K","Q_Cl","Q_PO4","Q_S","Q_Ace", "Dose"))
+  select(c("OC","Q_NH4", "Q_Na", "Q_K","Q_Cl","Q_PO4","Q_SO4","Q_Ace", "Dose"))
 
 Norm_sd<-
   ALL_Biochars%>%
-  select(c("OC","Q_NH4_sd", "Q_Na_sd", "Q_K_sd","Q_Cl_sd", "Q_PO4_sd", "Q_S_sd", "Q_Ace_sd","Dose"))
+  select(c("OC","Q_NH4_sd", "Q_Na_sd", "Q_K_sd","Q_Cl_sd", "Q_PO4_sd", "Q_SO4_sd", "Q_Ace_sd","Dose"))
 
 #Attempting to Represent Uncertainty with Transleucency 
 
@@ -658,23 +682,23 @@ Norm_sd$normalized_K_sd <- 1-(Norm_sd$Q_K_sd / max(Norm_sd$Q_K_sd))
 
 Norm_sd$normalized_Cl_sd <-1-( Norm_sd$Q_Cl_sd / max(Norm_sd$Q_Cl_sd))
 Norm_sd$normalized_PO4_sd <- 1-( Norm_sd$Q_PO4_sd / max(Norm_sd$Q_PO4_sd))
-Norm_sd$normalized_S_sd <- 1-(Norm_sd$Q_S_sd / max(Norm_sd$Q_S_sd))
+Norm_sd$normalized_SO4_sd <- 1-(Norm_sd$Q_SO4_sd / max(Norm_sd$Q_SO4_sd))
 Norm_sd$normalized_Ace_sd <- 1-(Norm_sd$Q_Ace_sd / max(Norm_sd$Q_Ace_sd))
 
 
 Norm_long <-
   Norm_%>%
   pivot_longer(
-    cols=c(Q_NH4, Q_Na, Q_K, Q_Cl, Q_PO4, Q_S, Q_Ace),
+    cols=c(Q_NH4, Q_Na, Q_K, Q_Cl, Q_PO4, Q_SO4, Q_Ace),
     names_to ="Ion_species",
     values_to="Q",
     names_repair="minimal")
 
 Norm_long_sd <- 
     Norm_sd%>%
-  select(c("OC","normalized_NH4_sd", "normalized_Na_sd", "normalized_K_sd", "normalized_Cl_sd", "normalized_PO4_sd", "normalized_S_sd", "normalized_Ace_sd", "Dose")) %>%
+  select(c("OC","normalized_NH4_sd", "normalized_Na_sd", "normalized_K_sd", "normalized_Cl_sd", "normalized_PO4_sd", "normalized_SO4_sd", "normalized_Ace_sd", "Dose")) %>%
   pivot_longer(
-    cols=c(normalized_NH4_sd, normalized_Na_sd, normalized_K_sd, normalized_Cl_sd, normalized_PO4_sd, normalized_S_sd, normalized_Ace_sd),
+    cols=c(normalized_NH4_sd, normalized_Na_sd, normalized_K_sd, normalized_Cl_sd, normalized_PO4_sd, normalized_SO4_sd, normalized_Ace_sd),
     names_to ="Ion_Species_sd",
     values_to="Normalized_Q_sd",
     names_repair="minimal")
@@ -920,5 +944,9 @@ Q_no_NH4_high_plot <- ggplot(Q_no_NH4_high, aes(x = Dose, y = Q, fill = Ion_spec
          axis.title.y = element_text(margin = margin(r = 20), size = 16))+
      scale_fill_brewer(palette = "Dark2")
 Q_no_NH4_high_plot 
+
+```
+
+```{r}
 
 ```

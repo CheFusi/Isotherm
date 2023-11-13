@@ -698,27 +698,218 @@ AK_20_An_In<-data.frame(lapply(AK_20_An_In,rep, times=3))
 colnames(AK_20_An_In)<-c("AK_Ace_In","AK_Cl_In","AK_P_In","AK_S_In","AK_Carb_In")
 #-------------------------------------------------------------------------------
 
+
 ```
 
+## Nov 2023 Edits
+
+-   In is just in, not avg of in and ctrl - started to fix this but ended up still using the avg value
+
+-   #overide definition of In
+
+```{r}
+
+#Cations
+
+AK_5_Cat_In <- AK5Stats[,c(1:3)] %>%
+  pivot_wider(names_from = Cation_Species, values_from = c(AK5In_mean, AK5In_std))
+
+AK_5_Cat_In<-data.frame(data.frame(lapply(AK_5_Cat_In,rep,times=24)))
+
+colnames(AK_5_Cat_In)<-c("AK_NH4_In","AK_Mg_In","AK_K_In","AK_Na_In","AK_NH4_std","AK_Mg_std","AK_K_std","AK_Na_std")
+
+AK_20_Cat_In <- AK20Stats[,c(1:3)] %>%
+  pivot_wider(names_from = Cation_Species, values_from = c(AK20In_mean, AK20In_std))
+
+AK_20_Cat_In<-data.frame(data.frame(lapply(AK_20_Cat_In,rep,times=24)))
+
+colnames(AK_20_Cat_In)<-c("AK_NH4_In","AK_Mg_In","AK_K_In","AK_Na_In","AK_NH4_std","AK_Mg_std","AK_K_std","AK_Na_std")
+
+#------------------------------------------------------------------------------------------
+#Anions - need to first pivot and get stats (only previously did for cations)
+
+AKAnIn5Long<-
+  AK_5_An_In_mol%>%
+  pivot_longer(
+    cols=c(Acetate,Chloride,Phosphate,Sulfate,Carbonate),
+    names_to ="Anion_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5%)
+AKAn5Stats <- AKAnIn5Long %>%
+  group_by(Anion_Species) %>%
+  summarise(AK5AnIn_mean=mean(Concentration,na.rm=FALSE),
+            #.groups='rowwise',
+            AK5AnIn_std=sd(Concentration, na.rm=FALSE))
+AKAn5Stats<-data.frame(AKAn5Stats)
+#-------------------------------------------------------------------------------
+AKAnIn20Long<-
+  AK_20_An_In_mol%>%
+  pivot_longer(
+    cols=c(Acetate,Chloride,Phosphate,Sulfate,Carbonate),
+    names_to ="Anion_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5%)
+AKAn20Stats <- AKAnIn20Long %>%
+  group_by(Anion_Species) %>%
+  summarise(AK20AnIn_mean=mean(Concentration,na.rm=FALSE),
+            #.groups='rowwise',
+            AK20AnIn_std=sd(Concentration, na.rm=FALSE))
+AKAn20Stats<-data.frame(AKAn20Stats)
+#--------------------------------------------------------------------------------
+
+
+AK_5_An_In <- AKAn5Stats[,c(1:3)] %>%
+  pivot_wider(names_from = Anion_Species, values_from = c(AK5AnIn_mean, AK5AnIn_std))
+
+AK_5_An_In<-data.frame(data.frame(lapply(AK_5_An_In,rep,times=24)))
+
+colnames(AK_5_An_In)<-c("AK_Ace_In","AK_Carb_In","AK_Cl_In","AK_P_In","AK_S_In","AK_Ace_std","AK_Carb_std","AK_Cl_std","AK_P_std","AK_S_std")
+
+
+AK_20_An_In <- AKAn20Stats[,c(1:3)] %>%
+  pivot_wider(names_from = Anion_Species, values_from = c(AK20AnIn_mean, AK20AnIn_std))
+
+AK_20_An_In<-data.frame(data.frame(lapply(AK_20_An_In,rep,times=24)))
+
+colnames(AK_20_An_In)<-c("AK_Ace_In","AK_Carb_In","AK_Cl_In","AK_P_In","AK_S_In","AK_Ace_std","AK_Carb_std","AK_Cl_std","AK_P_std","AK_S_std")
+
+
+```
+
+Nov 2023 Edits cont.
+
+```{r}
+#Standards
+
+#Cations
+
+AK_5_Ctrl_Avg <- AK_ctrl_5_mol %>%
+  group_by(group = gl(n() / 3, 3)) %>%  # Create groups of every 3 rows
+  summarise_at(vars(Sodium, Ammonium, Potassium, Magnesium), list(mean = ~mean(., na.rm = TRUE), sd = ~sd(., na.rm = TRUE))) %>% 
+  select(-1)
+colnames(AK_5_Ctrl_Avg)<-c("Na_ctrl","NH4_ctrl","K_ctrl","Mg_ctrl","Na_ctrl_std","NH4_ctrl_std","K_ctrl_std","Mg_ctrl_std")
+
+#creating the in columns, considering 2 reps of C, 3 of B, 3 of A (in this order), and how each is in triplicate
+
+AK_5_Ctrl_All<-data.frame(rbind(data.frame(lapply(AK_5_Ctrl_Avg[3,],rep,times=6)),
+                         data.frame(lapply(AK_5_Ctrl_Avg[2,],rep,times=9)),
+                         data.frame(lapply(AK_5_Ctrl_Avg[1,],rep,times=9))))
+
+
+
+AK_20_Ctrl_Avg<-data.frame(AK_ctrl_20_mol %>%
+  group_by(group = gl(n() / 3, 3)) %>%  # Create groups of every 3 rows
+  summarise_at(vars(Sodium, Ammonium, Potassium, Magnesium), list(mean = ~mean(., na.rm = TRUE), sd = ~sd(., na.rm = TRUE))))%>% 
+  select(-1)
+
+colnames(AK_20_Ctrl_Avg)<-c("Na_ctrl","NH4_ctrl","K_ctrl","Mg_ctrl","Na_ctrl_std","NH4_ctrl_std","K_ctrl_std","Mg_ctrl_std")
+
+AK_20_Ctrl_All<-data.frame(rbind(data.frame(lapply(AK_20_Ctrl_Avg[3,],rep,times=6)),
+                         data.frame(lapply(AK_20_Ctrl_Avg[2,],rep,times=9)),
+                         data.frame(lapply(AK_20_Ctrl_Avg[1,],rep,times=9))))
+
+#Anions
+AK_5_An_Ctrl_Avg<-data.frame(AK_ctrl_5_An_mol %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+        summarise_at(vars(Acetate,Chloride,Phosphate, Sulfate,Carbonate), list(mean = ~mean(., na.rm = TRUE), sd = ~sd(., na.rm = TRUE))))%>% 
+  select(-1)
+colnames(AK_5_An_Ctrl_Avg)<-c("Ace_ctrl","Cl_ctrl","P_ctrl","S_ctrl","Carb_ctrl","Ace_ctrl_std","Cl_ctrl_std","P_ctrl_std","S_ctrl_std","Carb_ctrl_std")
+
+AK_5_An_Ctrl_All<-data.frame(rbind(data.frame(lapply(AK_5_An_Ctrl_Avg[3,],rep,times=6)),
+                         data.frame(lapply(AK_5_An_Ctrl_Avg[2,],rep,times=9)),
+                         data.frame(lapply(AK_5_An_Ctrl_Avg[1,],rep,times=9))))
+
+AK_20_An_Ctrl_Avg<-data.frame(AK_ctrl_20_An_mol %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+        summarise_at(vars(Acetate,Chloride,Phosphate, Sulfate,Carbonate), list(mean = ~mean(., na.rm = TRUE), sd = ~sd(., na.rm = TRUE))))%>% 
+  select(-1)
+colnames(AK_20_An_Ctrl_Avg)<-c("Ace_ctrl","Cl_ctrl","P_ctrl","S_ctrl","Carb_ctrl","Ace_ctrl_std","Cl_ctrl_std","P_ctrl_std","S_ctrl_std","Carb_ctrl_std")
+
+AK_20_An_Ctrl_All<-data.frame(rbind(data.frame(lapply(AK_20_An_Ctrl_Avg[3,],rep,times=6)),
+                         data.frame(lapply(AK_20_An_Ctrl_Avg[2,],rep,times=9)),
+                         data.frame(lapply(AK_20_An_Ctrl_Avg[1,],rep,times=9))))
+
+```
+
+\*\*\* change \# reps for other biochars e.g. AM_20 should only be 2
+
+```{r}
+
+AK_5_Cat_In<-data.frame(lapply(AK_5_Cat_In,rep, times=3))
+AK_20_Cat_In<-data.frame(lapply(AK_20_Cat_In,rep, times=3))
+
+AK_5_An_In<-data.frame(lapply(AK_5_An_In,rep, times=3))
+AK_20_An_In<-data.frame(lapply(AK_20_An_In,rep, times=3))
+
+
+AK_5_Ctrl_All<-data.frame(lapply(AK_5_Ctrl_All,rep, times=3))
+AK_20_Ctrl_All<-data.frame(lapply(AK_20_Ctrl_All,rep, times=3))
+
+AK_5_An_Ctrl_All<-data.frame(lapply(AK_5_An_Ctrl_All,rep, times=3))
+AK_20_An_Ctrl_All<-data.frame(lapply(AK_20_An_Ctrl_All,rep, times=3))
+```
+
+updated dataframes:
+
+-   AK_5_Cat_In, AK_20_Cat_In
+
+-   AK_5_An_In, AK_20_An_In
+
+before these either were avg of in and ctrl
+
+New dataframes
+
+-   AK_5_Ctrl_All, AK_20_Ctrl_All
+
+-   AK_5_An_Ctrl_All, AK_20_An_Ctrl_All
+
+these weren't defined independenly before
+
+End Nov. 2023 edits - these dataframes are included below up to the Oct 2023 edits.
+
 ## Adding biochar mass, urine volume, and initial urine
+
+edited Nov 2023 to include new columns
 
 ```{r}
 #Cations
 
-AK_5_All<-data.frame(cbind(AK_5_All,AK_5_Cat_In,AK_5_An_In,volume, mass_biochar))
-AK_20_All<-data.frame(cbind(AK_20_All,AK_20_Cat_In,AK_20_An_In, volume, mass_biochar))
+AK_5_All<-data.frame(cbind(AK_5_All,AK_5_Cat_In,AK_5_An_In,volume, mass_biochar, AK_5_Ctrl_All, AK_5_An_Ctrl_All))
+AK_20_All<-data.frame(cbind(AK_20_All,AK_20_Cat_In,AK_20_An_In, volume, mass_biochar, AK_20_Ctrl_All, AK_20_An_Ctrl_All))
 
 ```
 
 ## Calculating the Normalized Ion Concentrations and Dose
 
+edited Nov 2023 to update reference value for columns being divided
+
 ```{r}
-AK_5_All[30:38]<-data.frame(mapply('/',AK_5_All[5:13],AK_5_All[19:27]))
-AK_20_All[30:38]<-data.frame(mapply('/',AK_20_All[5:13],AK_20_All[19:27]))
+AK_5_All$Na_Norm<- AK_5_All$Sodium/AK_5_All$AK_Na_In
+AK_5_All$NH4_Norm<- AK_5_All$Ammonium/AK_5_All$AK_NH4_In
+AK_5_All$K_Norm<- AK_5_All$Potassium/AK_5_All$AK_K_In
+AK_5_All$Mg_Norm<- AK_5_All$Magnesium/AK_5_All$AK_Mg_In
 
-colnames(AK_5_All)[30:38]<-c("Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm")
-colnames(AK_20_All)[30:38]<-c("Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm")
+AK_5_All$Ace_Norm<- AK_5_All$Acetate/AK_5_All$AK_Ace_In
+AK_5_All$Cl_Norm<- AK_5_All$Chloride/AK_5_All$AK_Cl_In
+AK_5_All$P_Norm<- AK_5_All$Phosphate/AK_5_All$AK_P_In
+AK_5_All$S_Norm<- AK_5_All$Sulfate/AK_5_All$AK_S_In
+AK_5_All$Carb_Norm<- AK_5_All$Carbonate/AK_5_All$AK_Carb_In
 
+
+AK_20_All$Na_Norm<- AK_20_All$Sodium/AK_20_All$AK_Na_In
+AK_20_All$NH4_Norm<- AK_20_All$Ammonium/AK_20_All$AK_NH4_In
+AK_20_All$K_Norm<- AK_20_All$Potassium/AK_20_All$AK_K_In
+AK_20_All$Mg_Norm<- AK_20_All$Magnesium/AK_20_All$AK_Mg_In
+
+AK_20_All$Ace_Norm<- AK_20_All$Acetate/AK_20_All$AK_Ace_In
+AK_20_All$Cl_Norm<- AK_20_All$Chloride/AK_20_All$AK_Cl_In
+AK_20_All$P_Norm<- AK_20_All$Phosphate/AK_20_All$AK_P_In
+AK_20_All$S_Norm<- AK_20_All$Sulfate/AK_20_All$AK_S_In
+AK_20_All$Carb_Norm<- AK_20_All$Carbonate/AK_20_All$AK_Carb_In
 ```
 
 ## Determining Dose
@@ -788,6 +979,8 @@ AK_5_All$Q_Ace<-Q_function(AK_5_All,"Q_Ace","AK_Ace_In","Acetate","volume","mass
 
 ## Average and stdev of Replicates
 
+-   Edited Nov 2023: AK_5_All_Avg script made easier
+
 -   Calculating the average and stdev of the replicates an combining them into one dataframe
 
 -   calculating Q_sd as a percent of Q to determine where to cuz off the data
@@ -795,11 +988,12 @@ AK_5_All$Q_Ace<-Q_function(AK_5_All,"Q_Ace","AK_Ace_In","Acetate","volume","mass
 ```{r}
 
 #taking the average 
+
 AK_5_All_Avg<-data.frame(
  AK_5_All %>%
+   select(-PHREEQC_number, -Rep) %>%
     group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
-    summarise_at(c("Ox","ID","Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","AK_Na_In","AK_NH4_In","AK_K_In","AK_Mg_In","AK_Ace_In","AK_Cl_In","AK_P_In","AK_S_In","AK_Carb_In","volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg","Q_Cl","Q_PO4","Q_S","Q_Ace"),mean))
-AK_5_All_Avg
+     summarise(across(everything(), mean, na.rm = TRUE)))
 
 #taking stdev
 AK_5_All_sd<-data.frame(
@@ -844,11 +1038,12 @@ AK_5_All_Avg_sd$Q_Ace_sd_perc<-(abs(mapply('*',AK_5_All_Avg_sd$Q_Ace_sd_perc,100
 
 #------------------------------------------------------------------------------------------------------------
 
+
 AK_20_All_Avg<-data.frame(
  AK_20_All %>%
+   select(-PHREEQC_number, -Rep) %>%
     group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
-    summarise_at(c("Ox","ID","Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","AK_Na_In","AK_NH4_In","AK_K_In","AK_Mg_In","AK_Ace_In","AK_Cl_In","AK_P_In","AK_S_In","AK_Carb_In","volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg","Q_Cl","Q_PO4","Q_S","Q_Ace"),mean))
-AK_20_All_Avg
+     summarise(across(everything(), mean, na.rm = TRUE)))
 
 #taking stdev
 AK_20_All_sd<-data.frame(
@@ -905,6 +1100,8 @@ AK_20_All_Avg_sd$Ox<-as.factor(AK_20_All_Avg$Ox)
 ## Oct 2023 Edit
 
 Resaving file as RDS to work on in separate .rmd file
+
+Note - In is just in, not avg of in and ctrl - verifying
 
 ```{r}
 AK_All_Avg<-rbind(AK_5_All_Avg_sd,AK_20_All_Avg_sd)

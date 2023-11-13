@@ -262,15 +262,15 @@ AN_30_An_mol
 
 #Ctrls Cations
 
-AN_ctrl_5_mol<-mapply('/', ANctrl_30[,4:7],moles)
-AN_ctrl_5_mol<-data.frame(cbind(ANctrl_30[,1:3],AN_ctrl_5_mol))
-colnames(AN_ctrl_5_mol)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
+AN_ctrl_30_mol<-mapply('/', ANctrl_30[,4:7],moles)
+AN_ctrl_30_mol<-data.frame(cbind(ANctrl_30[,1:3],AN_ctrl_30_mol))
+colnames(AN_ctrl_30_mol)<-as.character(c('Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium'))
 
 #Ctrl Anions 
 
-AN_ctrl_5_An_mol<-mapply('/', ANctrl_30_An[,4:8],moles_An)
-AN_ctrl_5_An_mol<-data.frame(cbind(ANctrl_30_An[,1:3],AN_ctrl_5_An_mol))
-colnames(AN_ctrl_5_An_mol)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate'))
+AN_ctrl_30_An_mol<-mapply('/', ANctrl_30_An[,4:8],moles_An)
+AN_ctrl_30_An_mol<-data.frame(cbind(ANctrl_30_An[,1:3],AN_ctrl_30_An_mol))
+colnames(AN_ctrl_30_An_mol)<-as.character(c('Ox','ID','Rep','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate'))
 ```
 
 ## Combining Influent 6 with Control 3 for each reactor size, and Taking the means
@@ -291,13 +291,13 @@ AN_30_In_An_avg<-data.frame(lapply(AN_30_An_In_mol[,4:8], mean))
 #taking the mean of A, B, and C
 
 #Cations
-AN_30_Ctrl_Avg<-data.frame( AN_ctrl_5_mol %>%
+AN_30_Ctrl_Avg<-data.frame( AN_ctrl_30_mol %>%
     group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
     summarise_at(c("Sodium","Ammonium","Potassium",'Magnesium'),mean,na.rm=TRUE))
 AN_30_Ctrl_Avg
 
 #Anions
-AN_30_An_Ctrl_Avg<-data.frame(AN_ctrl_5_An_mol %>%
+AN_30_An_Ctrl_Avg<-data.frame(AN_ctrl_30_An_mol %>%
     group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
     summarise_at(c('Acetate','Chloride','Phosphate', 'Sulfate','Carbonate'),mean,na.rm=TRUE))
 AN_30_An_Ctrl_Avg
@@ -355,7 +355,7 @@ row.names(AN_30_An_In_ABC)<-c("A","B","C")
 ```{r}
 #-------------------------------------------------------------------------------
 #pivoting 5/10/15% influent samples to long format for easier manipulation
-ANIn5Long<-
+ANIn30Long<-
   AN_30_In_mol%>%
   pivot_longer(
     cols=c(Sodium,Ammonium,Potassium,Magnesium),
@@ -364,15 +364,15 @@ ANIn5Long<-
     names_repair="minimal")
 
 #calculating the mean and stdev to make sure that variability is acceptable (<5%)
-AN5Stats <- ANIn5Long %>%
+AN30Stats <- ANIn30Long %>%
   group_by(Cation_Species) %>%
-  summarise(AN5In_mean=mean(Concentration,na.rm=FALSE),
+  summarise(AN30In_mean=mean(Concentration,na.rm=FALSE),
             #.groups='rowwise',
-            AN5In_std=sd(Concentration, na.rm=FALSE),
-            AN_perc_std=AN5In_std/ AN5In_mean*100)
-AN5Stats<-data.frame(AN5Stats)
+            AN30In_std=sd(Concentration, na.rm=FALSE),
+            AN_perc_std=AN30In_std/ AN30In_mean*100)
+AN30Stats<-data.frame(AN30Stats)
 #----------------------------------------------------------------------
-AN5Stats
+AN30Stats
 ```
 
 ## Control Statistics
@@ -380,8 +380,8 @@ AN5Stats
 ```{r}
 
 #pivoting
-ANctrl5Long<-
-  AN_ctrl_5_mol%>%
+ANctrl30Long<-
+  AN_ctrl_30_mol%>%
   pivot_longer(
     cols=c(Sodium,Ammonium,Potassium,Magnesium),
     names_to ="Cation_Species",
@@ -389,13 +389,13 @@ ANctrl5Long<-
     names_repair="minimal")
 
 #calculating the mean and stdev to make sure that variability is acceptable (<5%)
-AN5ctrlStats <- ANctrl5Long %>%
+AN30ctrlStats <- ANctrl30Long %>%
   group_by(Cation_Species) %>%
-  summarise(AN5ctrl_mean=mean(Concentration,na.rm=TRUE),
+  summarise(AN30ctrl_mean=mean(Concentration,na.rm=TRUE),
             #.groups='rowwise',
-            AN5ctrl_std=sd(Concentration, na.rm=TRUE),
-            AN_perc_std=AN5ctrl_std/ AN5ctrl_mean*100)
-AN5ctrlStats<-data.frame(AN5ctrlStats)
+            AN30ctrl_std=sd(Concentration, na.rm=TRUE),
+            AN_perc_std=AN30ctrl_std/ AN30ctrl_mean*100)
+AN30ctrlStats<-data.frame(AN30ctrlStats)
 
 ```
 
@@ -547,25 +547,146 @@ colnames(AN_30_An_In)<-c("AN_Ace_In","AN_Cl_In","AN_P_In","AN_S_In","AN_Carb_In"
 
 ```
 
+## Nov 2023 Edits
+
+-   In is just in, not avg of in and ctrl - started to fix this but ended up still using the avg value
+
+-   #overide definition of In
+
+```{r}
+
+#Cations
+
+AN_30_Cat_In <- AN30Stats[,c(1:3)] %>%
+  pivot_wider(names_from = Cation_Species, values_from = c(AN30In_mean, AN30In_std))
+
+AN_30_Cat_In<-data.frame(data.frame(lapply(AN_30_Cat_In,rep,times=24)))
+
+colnames(AN_30_Cat_In)<-c("AN_NH4_In","AN_Mg_In","AN_K_In","AN_Na_In","AN_NH4_std","AN_Mg_std","AN_K_std","AN_Na_std")
+
+#------------------------------------------------------------------------------------------
+#Anions - need to first pivot and get stats (only previously did for cations)
+
+
+#-------------------------------------------------------------------------------
+ANAnIn20Long<-
+  AN_30_An_In_mol%>%
+  pivot_longer(
+    cols=c(Acetate,Chloride,Phosphate,Sulfate,Carbonate),
+    names_to ="Anion_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to mANe sure that variability is acceptable (<5%)
+ANAn30Stats <- ANAnIn20Long %>%
+  group_by(Anion_Species) %>%
+  summarise(AN30AnIn_mean=mean(Concentration,na.rm=FALSE),
+            #.groups='rowwise',
+            AN30AnIn_std=sd(Concentration, na.rm=FALSE))
+ANAn30Stats<-data.frame(ANAn30Stats)
+#--------------------------------------------------------------------------------
+
+AN_30_An_In <- ANAn30Stats[,c(1:3)] %>%
+  pivot_wider(names_from = Anion_Species, values_from = c(AN30AnIn_mean, AN30AnIn_std))
+
+AN_30_An_In<-data.frame(data.frame(lapply(AN_30_An_In,rep,times=24)))
+
+colnames(AN_30_An_In)<-c("AN_Ace_In","AN_Carb_In","AN_Cl_In","AN_P_In","AN_S_In","AN_Ace_std","AN_Carb_std","AN_Cl_std","AN_P_std","AN_S_std")
+
+
+```
+
+Nov 2023 Edits cont.
+
+```{r}
+#Standards
+
+#Cations
+
+AN_30_Ctrl_Avg<-data.frame(AN_ctrl_30_mol %>%
+  group_by(group = gl(n() / 3, 3)) %>%  # Create groups of every 3 rows
+  summarise_at(vars(Sodium, Ammonium, Potassium, Magnesium), list(mean = ~mean(., na.rm = TRUE), sd = ~sd(., na.rm = TRUE))))%>% 
+  select(-1)
+
+colnames(AN_30_Ctrl_Avg)<-c("Na_ctrl","NH4_ctrl","K_ctrl","Mg_ctrl","Na_ctrl_std","NH4_ctrl_std","K_ctrl_std","Mg_ctrl_std")
+
+AN_30_Ctrl_All<-data.frame(rbind(data.frame(lapply(AN_30_Ctrl_Avg[3,],rep,times=6)),
+                         data.frame(lapply(AN_30_Ctrl_Avg[2,],rep,times=9)),
+                         data.frame(lapply(AN_30_Ctrl_Avg[1,],rep,times=9))))
+
+#Anions
+
+AN_30_An_Ctrl_Avg<-data.frame(AN_ctrl_30_An_mol %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+        summarise_at(vars(Acetate,Chloride,Phosphate, Sulfate,Carbonate), list(mean = ~mean(., na.rm = TRUE), sd = ~sd(., na.rm = TRUE))))%>% 
+  select(-1)
+colnames(AN_30_An_Ctrl_Avg)<-c("Ace_ctrl","Cl_ctrl","P_ctrl","S_ctrl","Carb_ctrl","Ace_ctrl_std","Cl_ctrl_std","P_ctrl_std","S_ctrl_std","Carb_ctrl_std")
+
+AN_30_An_Ctrl_All<-data.frame(rbind(data.frame(lapply(AN_30_An_Ctrl_Avg[3,],rep,times=6)),
+                         data.frame(lapply(AN_30_An_Ctrl_Avg[2,],rep,times=9)),
+                         data.frame(lapply(AN_30_An_Ctrl_Avg[1,],rep,times=9))))
+
+```
+
+\*\*\* change \# reps for other biochars e.g. AM_20 should only be 2
+
+```{r}
+
+AN_30_Cat_In<-data.frame(lapply(AN_30_Cat_In,rep, times=1))
+
+AN_30_An_In<-data.frame(lapply(AN_30_An_In,rep, times=1))
+
+AN_30_Ctrl_All<-data.frame(lapply(AN_30_Ctrl_All,rep, times=1))
+
+AN_30_An_Ctrl_All<-data.frame(lapply(AN_30_An_Ctrl_All,rep, times=1))
+```
+
+updated dataframes:
+
+-   AO_10_Cat_In, AN_30_Cat_In
+
+-   AO_10_An_In, AN_30_An_In
+
+before these either were avg of in and ctrl
+
+New dataframes
+
+-   AO_10_Ctrl_All, AN_30_Ctrl_All
+
+-   AO_10_An_Ctrl_All, AN_30_An_Ctrl_All
+
+these weren't defined independenly before
+
+End Nov. 2023 edits - these dataframes are included below up to the Oct 2023 edits.
+
 ## Adding biochar mass, urine volume, and initial urine
+
+edited Nov 2023 to include new columns
 
 ```{r}
 #Cations
 
-AN_30_All<-data.frame(cbind(AN_30_All,AN_30_Cat_In,AN_30_An_In,volume[1:24,]), mass_biochar[1:24,])
+AN_30_All<-data.frame(cbind(AN_30_All,AN_30_Cat_In,AN_30_An_In, volume=volume[c(1:24),], mass_biochar=mass_biochar[c(1:24),], AN_30_Ctrl_All, AN_30_An_Ctrl_All))
 
-colnames(AN_30_All)[28:29]<-c("volume","mass_biochar") #needed to add because I extracted only a portion of the volumen and mass columns and for some reason that changes the names
 ```
 
 ## Calculating the Normalized Ion Concentrations and Dose
 
+edited Nov 2023 to update reference value for columns being divided
+
 ```{r}
-AN_30_All[30:38]<-data.frame(mapply('/',AN_30_All[5:13],AN_30_All[19:27]))
 
 
-colnames(AN_30_All)[30:38]<-c("Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm")
+AN_30_All$Na_Norm<- AN_30_All$Sodium/AN_30_All$AN_Na_In
+AN_30_All$NH4_Norm<- AN_30_All$Ammonium/AN_30_All$AN_NH4_In
+AN_30_All$K_Norm<- AN_30_All$Potassium/AN_30_All$AN_K_In
+AN_30_All$Mg_Norm<- AN_30_All$Magnesium/AN_30_All$AN_Mg_In
 
-
+AN_30_All$Ace_Norm<- AN_30_All$Acetate/AN_30_All$AN_Ace_In
+AN_30_All$Cl_Norm<- AN_30_All$Chloride/AN_30_All$AN_Cl_In
+AN_30_All$P_Norm<- AN_30_All$Phosphate/AN_30_All$AN_P_In
+AN_30_All$S_Norm<- AN_30_All$Sulfate/AN_30_All$AN_S_In
+AN_30_All$Carb_Norm<- AN_30_All$Carbonate/AN_30_All$AN_Carb_In
 ```
 
 ## Determining Dose
@@ -619,12 +740,11 @@ AN_30_All$Q_Ace<-Q_function(AN_30_All,"Q_Ace","AN_Ace_In","Acetate","volume","ma
 
 ```{r}
 
-#taking the average 
 AN_30_All_Avg<-data.frame(
  AN_30_All %>%
+   select(-PHREEQC_number, -Rep) %>%
     group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
-    summarise_at(c("Ox","ID","Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","AN_Na_In","AN_NH4_In","AN_K_In","AN_Mg_In","AN_Ace_In","AN_Cl_In","AN_P_In","AN_S_In","AN_Carb_In","volume","mass_biochar","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Dose","Q_NH4","Q_Na","Q_K","Q_Mg","Q_Cl","Q_PO4","Q_S","Q_Ace"),mean))
-AN_30_All_Avg
+     summarise(across(everything(), mean, na.rm = TRUE)))
 
 #taking stdev
 AN_30_All_sd<-data.frame(
@@ -1212,7 +1332,7 @@ AN_O_C_Plot_Conc<- ggplot(AN_O_C_vs_Sorp_Dens,aes(x=O_C_EA,y=Q_Conc_350, na.rm=T
 AN_O_C_Plot_Conc
 ```
 
-Combining AK, AM, AL, & AN
+Combining AN, AM, AL, & AN
 
 ```{r}
 AK_AM_AL_AN_O_C<-data.frame(rbind(AK_O_C_vs_Sorp_Dens,AM_O_C_vs_Sorp_Dens,AL_O_C_vs_Sorp_Dens,AN_O_C_vs_Sorp_Dens))
