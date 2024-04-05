@@ -3,7 +3,7 @@ title: "All_Isotherms"
 output: html_document
 date: "2023-05-23"
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
@@ -45,7 +45,7 @@ lapply(libs,require, character.only=TRUE)
 ```
 
 ```{r}
-
+AK<-readRDS("AK.RDS")
 AK<-readRDS("AK.RDS")
 AL<-readRDS("AL.RDS")
 AM<-readRDS("AM.RDS")
@@ -57,7 +57,7 @@ AL_ALL<-readRDS("AL_ALL.rds")
 AM_ALL<-readRDS("AM_ALL.rds")
 AN_ALL<-readRDS("AN_ALL.rds")
 AO_ALL<-readRDS("AO_ALL.rds")
-
+int_ALL<-readRDS("int_ALL.rds")
 
 #Renaming all the columns so I could rbind them later - they need to have the same name for this to be possible. 
 
@@ -95,6 +95,69 @@ names(AM_ALL)<-new_column_names
 names(AN_ALL)<-new_column_names
 names(AO_ALL)<-new_column_names
 
+#updating int. iso column names 
+colnames(int_ALL)[colnames(int_ALL) == "ID"] <- "Sample_ID"
+colnames(int_ALL)[colnames(int_ALL) == "Ox"] <- "H2O2_conc"
+
+old_column_names <- c("Act_NH4","Act_Na","Act_K", 
+                      "Sodium", "Ammonium", "Potassium","Magnesium","Acetate",
+                      "Chloride","Phosphate","Sulfate","Carbonate",
+                      "NH4_std", "Mg_std","K_std", "Na_std",
+                      "Ace_std","Carb_std","Cl_std","P_std","S_std",
+                      "Q_S",
+                       "Sodium_sd", "Ammonium_sd","Potassium_sd", "Magnesium_sd", "Acetate_sd", "Chloride_sd", "Phosphate_sd", "Sulfate_sd", "Carbonate_sd",
+                      "Act_NH4_sd","Act_Na_sd","Act_K_sd",
+                      "P_In","S_In",
+                      "Na_ctrl_std","NH4_ctrl_std","K_ctrl_std","Mg_ctrl_std",
+                      "P_ctrl", "S_ctrl",
+                      "Ace_ctrl_std","Cl_ctrl_std", "P_ctrl_std", "S_ctrl_std", "Carb_ctrl_std",
+                      "P_Norm", "S_Norm",
+                      "K_Ace_Norm_sd", #typo - should just be Ace
+                      "P_Norm_sd","S_Norm_sd",
+                      "Q_S_sd"
+                      )
+
+new_column_names <- c("NH4_Act","Na_Act","K_Act",
+                      "Na_Conc", "NH4_Conc","K_Conc", "Mg_Conc",
+                       "Ace_Conc","Cl_Conc", "PO4_Conc", "SO4_Conc","Carb_Conc",
+                       "NH4_In_sd","Mg_In_sd","K_In_sd","Na_In_sd",
+                       "Ace_In_sd","Carb_In_sd","Cl_In_sd","PO4_In_sd","SO4_In_sd",
+                       "Q_SO4",
+                       "Na_Conc_sd","NH4_Conc_sd", "K_Conc_sd", "Mg_Conc_sd", "Ace_Conc_sd", "Cl_Conc_sd", "PO4_Conc_sd", "SO4_Conc_sd", "Carb_Conc_sd",
+                      "NH4_Act_sd","Na_Act_sd","K_Act_sd",
+                      "PO4_In","S04_In",
+                      "Na_ctrl_sd", "NH4_ctrl_sd", "K_ctrl_sd", "Mg_ctrl_sd",
+                      "PO4_ctrl", "SO4_ctrl",
+                      "Ace_ctrl_sd", "Cl_ctrl_sd", "PO4_ctrl_sd", "SO4_ctrl_sd", "Carb_ctrl_sd",
+                      "PO4_Norm", "SO4_Norm",
+                      "Ace_Norm_sd",
+                      "PO4_Norm_sd","SO4_Norm_sd",
+                      "Q_SO4_sd"
+                      )
+
+# Change column names
+colnames(int_ALL)[colnames(int_ALL) %in% old_column_names] <- new_column_names
+
+#To ensure you've updated all the column names: 
+
+# Get the column names of df1 and df2
+#colnames_df1 <- colnames(int_ALL)
+#colnames_df2 <- colnames(ALL_Biochars)
+
+# Find the column names that are unique to each dataframe
+#unique_to_df1 <- setdiff(colnames_df1, colnames_df2)
+#unique_to_df2 <- setdiff(colnames_df2, colnames_df1)
+
+#unique_to_df1
+
+#unique_to_df2
+
+
+#assigning H2O2 conc for int. data
+
+int_ALL$H2O2_conc <- c(05,10, 15, 20, 30, 30, 5, 10, 15, 20, 25, 30, 10, 12, 15, 20, 00)
+
+
 #combining all the dataframes 
 ALL_Biochars<-rbind(AK_ALL,AL_ALL,AM_ALL,AN_ALL,AO_ALL)
                     #,AM,AN,AO)
@@ -108,13 +171,13 @@ AK_O_C_EA<-(c(0.197,
 0.302))
 
 
-AK_O_C_EA<-rep(AK_O_C_EA,each=8)
+AK_O_C_EA_1<-rep(AK_O_C_EA,each=8)
 Type_AK=rep("AK", each = 8*6)
 
 AL_O_C_EA<-(c(0.167,
 0.322,
 0.493))
-AL_O_C_EA<-rep(AL_O_C_EA,each=8)
+AL_O_C_EA_1<-rep(AL_O_C_EA,each=8)
 Type_AL=rep("AL", each = 8*3)
 
 AM_O_C_EA<-(c(0.133,
@@ -122,11 +185,11 @@ AM_O_C_EA<-(c(0.133,
 0.184,
 0.204,
 0.205))
-AM_O_C_EA<-rep(AM_O_C_EA,each=8)
+AM_O_C_EA_1<-rep(AM_O_C_EA,each=8)
 Type_AM=rep("AM", each = 8*5)
 
 AN_O_C_EA<-(0.138)
-AN_O_C_EA<-rep(AN_O_C_EA,each=8)
+AN_O_C_EA_1<-rep(AN_O_C_EA,each=8)
 Type_AN=rep("AN", each = 8)
 
 #UPDATED O:C values with the reanalyzed values from June 2023
@@ -134,46 +197,89 @@ AO_O_C_EA<-(c(0.215,
 0.200,
 0.171,
 0.245))
-AO_O_C_EA<-rep(AO_O_C_EA,each=8)
+AO_O_C_EA_1<-rep(AO_O_C_EA,each=8)
 Type_AO=rep("AO", each = 8*4)
 
-EA_OC<-c(AK_O_C_EA, AL_O_C_EA, AM_O_C_EA, AN_O_C_EA, AO_O_C_EA)
+EA_OC<-c(AK_O_C_EA_1, AL_O_C_EA_1, AM_O_C_EA_1, AN_O_C_EA_1, AO_O_C_EA_1)
 Type <-c(Type_AK, Type_AL, Type_AM, Type_AN, Type_AO)
 
 ALL_Biochars$OC<-EA_OC
 
+#adding OC for int. iso
+int_ALL$OC <- c(AM_O_C_EA,AN_O_C_EA,AK_O_C_EA,AO_O_C_EA,AL_O_C_EA[1]) ##int. iso doesn't have AL 05, or AL 10
+
+# Adding in the Surface Area
+#Note. values that are 100.0 are awaiting clarification 
+
+SSA <- c(107.0, 100.0, 100.0, 100.0, 101.1, 90.1, 43.6, 41.5, 31.8, 119.0, 117.4, 119.8, 130.0, 167.1, 120.4, 99.2, 88.6, 83.9, 84.0)
+
+SSA_rep=rep(SSA, each = 8)
+ALL_Biochars$SSA <- SSA_rep
+int_ALL$SSA <- c(119.0, 117.4, 119.8, 130.0, 167.1, #AM
+                 120.4, #AN
+                 107.0, 100.0, 100.0, 100.0, 101.1, 90.1, #AK
+                 99.2, 88.6, 83.9, 84.0, #AO
+                 43.6) #int. iso doesn't have AL 05, or AL 10 (SSA= 41.5, 31.8)
+
+rep("AO", each = 8*4)
+
 #Distinguishing Bichar Types
 ALL_Biochars$Type<-Type
+int_ALL$Type <- c(rep("AM", each = 5),
+                      "AN",
+                      rep("AK", each = 6),
+                  rep("AO", each = 4),
+                  "AL")
 
 #Adding XPS O:C
 
 AK_XPS_C<-c(80.93, 80.23,0, 79.41, 78.41, 76.10)
 AK_XPS_O<-c(19.07,19.77,0, 20.59,21.59, 23.90 )
 AK_XPS_O_C<-((AK_XPS_O/AK_XPS_C)*(12/16))
-AK_XPS_O_C<-rep(AK_XPS_O_C,each=8)
+AK_XPS_O_C_1<-rep(AK_XPS_O_C,each=8)
 
 AL_XPS_C<-c(63.49,56.03,46.22)
 AL_XPS_O<-c(36.51,43.97,53.78)
 AL_XPS_O_C<-((AL_XPS_O/AL_XPS_C)*(12/16))
-AL_XPS_O_C<-rep(AL_XPS_O_C,each=8)
+AL_XPS_O_C_1<-rep(AL_XPS_O_C,each=8)
 
 AM_XPS_C<-c(86.00, 82.48,79.99,84.16,82.72 )
 AM_XPS_O<-c(14.00,17.52,20.01,15.84,17.28 )
 AM_XPS_O_C<-((AM_XPS_O/AM_XPS_C)*(12/16))
-AM_XPS_O_C<-rep(AM_XPS_O_C,each=8)
+AM_XPS_O_C_1<-rep(AM_XPS_O_C,each=8)
 
 AN_XPS_C<-c(82.52)
 AN_XPS_O<-c(17.48)
 AN_XPS_O_C<-((AN_XPS_O/AN_XPS_C)*(12/16))
-AN_XPS_O_C<-rep(AN_XPS_O_C,each=8)
+AN_XPS_O_C_1<-rep(AN_XPS_O_C,each=8)
 
 AO_XPS_C<-c(81.50,72.77,77.55,79.83)
 AO_XPS_O<-c(18.50,27.23,22.45,20.17)
 AO_XPS_O_C<-((AO_XPS_O/AO_XPS_C)*(12/16))
-AO_XPS_O_C<-rep(AO_XPS_O_C,each=8)
+AO_XPS_O_C_1<-rep(AO_XPS_O_C,each=8)
 
-XPS_OC<-c(AK_XPS_O_C,AL_XPS_O_C,AM_XPS_O_C,AN_XPS_O_C,AO_XPS_O_C)
+XPS_OC<-c(AK_XPS_O_C_1,AL_XPS_O_C_1,AM_XPS_O_C_1,AN_XPS_O_C_1,AO_XPS_O_C_1)
 ALL_Biochars$XPS_OC<-XPS_OC
+
+int_ALL$XPS_OC<-c(AM_XPS_O_C,AN_XPS_O_C,AK_XPS_O_C,AO_XPS_O_C,AO_XPS_O_C[1]) #only the first entry of AL since we only have AL00 samples for the int. iso data
+
+#Adding in int. iso data 
+
+# Reorder columns in int. iso dataframe to match the order of columns in ALL_Biochars
+int_ALL <- int_ALL[, colnames(ALL_Biochars)]
+
+# Row-bind the two data frames
+ALL_Biochars <- rbind(ALL_Biochars, int_ALL)
+
+
+#Normalizing to surface area
+ALL_Biochars$Q_NH4_SSA <- ALL_Biochars$Q_NH4/ALL_Biochars$SSA
+
+ALL_Biochars$Q_NH4_SSA_sd <- ALL_Biochars$Q_NH4_sd/ALL_Biochars$SSA
+
+#Normalizing to OC
+ALL_Biochars$Q_NH4_OC <- ALL_Biochars$Q_NH4/ALL_Biochars$OC
+
 
 #updating 0 to 00 and 5 to 05
 ALL_Biochars <- ALL_Biochars %>%
@@ -187,9 +293,8 @@ ALL_Biochars$H2O2_conc<- as.factor(ALL_Biochars$H2O2_conc)
 #creating Type_ox column that has type (AK) and ox conc (05)
 ALL_Biochars <-transform(ALL_Biochars, Type_ox = paste0(Type, "_", H2O2_conc))
 
-
-
-saveRDS(ALL_Biochars, file = "ALL_Biochars.RDS")
+# Loop through each column and replace NaN with NA
+#ALL_Biochars <- apply(ALL_Biochars, 2, function(x) ifelse(is.nan(x), NA, x))
 ```
 
 ## Q Corrected for losses to headspace using control
@@ -201,9 +306,15 @@ Q_function<-function(df,Q,C_In,C_eq,C_ctrl,volume,m_s) {
   Cin_Cctrl<-((df[[C_In]]-df[[C_ctrl]])*df[[volume]])
   df[[Q]]<- (Cin_Ceq-Cin_Cctrl)/df[[m_s]]         
   #df[[Q]]<-((df[[C_In]]-df[[C_eq]])*df[[volume]]/df[[m_s]])
-  }
+}
+
+#same volume so mol/L and mol should work
 ALL_Biochars$Q_Corr<-Q_function(ALL_Biochars,"Q_Corr","NH4_In","NH4_Conc","NH4_ctrl","volume","mass_biochar")
 
+#removal efficiency
+ALL_Biochars$Rem_Eff <- ((ALL_Biochars$NH4_In - ALL_Biochars$NH4_Conc)/ALL_Biochars$NH4_In)*100
+
+saveRDS(ALL_Biochars, file = "ALL_Biochars.RDS")
 ```
 
 ```{r}
@@ -247,7 +358,123 @@ ALL_Biochars<-ALL_Biochars%>%
 # ALL_Biochars$Q_Ace<-Q_function(ALL_Biochars,"Q_Ace","Ace_In","Ace_Conc","volume","mass_biochar")
 ```
 
-## 
+### Dilution based isotherm
+
+calculating the min and max sorption capacities for the biochars to determine the most dilute urine that would be informative.
+
+```{r}
+
+# creating a column that has Dose as character since some of the doses are repeating or long decimals and can't be filtered for if the Dose is in numeric form. 
+
+ALL_Biochars$Dose_chr <- as.character(ALL_Biochars$Dose)
+
+capacities<-ALL_Biochars%>%
+  filter(Dose_chr== "90.9090909090909") #%>%
+  #filter(Q_NH4>0)
+summary(capacities$Q_NH4)
+```
+
+### Dilutions for IC
+
+Determining the dilution factors for each biochar based on the sorption density at the 91 Dose
+
+```{r}
+# 
+capacities_2 <- capacities %>% select("Q_NH4","Type_ox")
+
+Cin <- 9000
+C_min <- 5500
+
+#possible urine concentrations (C_in)
+poss_urine_conc <- as.data.frame(rev(c(seq(from = C_min, to = Cin, length.out = 10))))
+
+#round to the nearest hundredth
+poss_urine_conc_mg <- round(poss_urine_conc/100)*100
+
+#poss_urine_conc <- as.data.frame( c(Cin, 8000, 7000, 6000, 5000, 4000, 3000, 2500, 2000))
+poss_urine_conc <- poss_urine_conc_mg/18
+names(poss_urine_conc) <- "urine_conc"
+
+#calculate C_eq
+
+# Define a function to calculate Ceq for a given Q value
+calculate_Ceq <- function(Q, Cin, M, V) {
+    return(Cin - (Q * (M / V)))
+}
+
+# Define a function to calculate Volume of full strength urine for given Cin values
+calculate_V1 <- function(Cin,C2,V2) {
+    return(C2*V2/(Cin/18))
+}
+
+calculate_MQ <- function(V1) {
+    return(V2-V1)
+}
+
+# M and V are the mass of biochar and volume of urine
+M <-  0.2
+V <-  0.0011
+V2 <- 50
+
+Ceq_list <- lapply(1:nrow(capacities_2), function(i) {
+    Q <- capacities_2$Q_NH4[i]
+    Type_ox <- capacities_2$Type_ox[i]
+    Ceq <- calculate_Ceq(Q, poss_urine_conc$urine_conc, M, V)
+    V1 <- calculate_V1(Cin, poss_urine_conc$urine_conc, V2)
+    MQ <- calculate_MQ(V1)
+    return(data.frame(Ceq,V1,MQ, row.names = NULL, check.names = FALSE))
+})
+
+names(Ceq_list) <- sapply(1:nrow(capacities_2), function(i) {
+    Type_ox <- capacities_2$Type_ox[i]
+    paste0(Type_ox)  # Create column name for Ceq values based on Q and Type_ox
+})
+
+
+df_list <- lapply(names(Ceq_list), function(x) {
+  df <- as.data.frame(Ceq_list[[x]])
+  names(df) <- paste0(x, "_", names(df))
+  return(df)
+})
+
+# Combine data frames into a single data frame
+Ceq_dataframe <- do.call(cbind, df_list)
+
+# Add Cin column from poss_urine_conc dataframe
+Ceq_dataframe$Cin <- poss_urine_conc$urine_conc
+Ceq_dataframe$Cin_mg <- 18*poss_urine_conc$urine_conc
+
+# Reorder columns to have Cin as the first column
+Ceq_dataframe <- Ceq_dataframe[c("Cin","Cin_mg", names(Ceq_dataframe[, -c((ncol(Ceq_dataframe) - 1):ncol(Ceq_dataframe))]))] #selecting all but the last two columns 
+
+Ceq_dataframe<- round(Ceq_dataframe,0)
+```
+
+```{r}
+# 
+# # Function to determine the dilution factor for a column
+# calculate_dilution_factor <- function(column) {
+#   # Filter out positive values
+#   positive_values <- column[column > 0]
+# 
+#   min_pos <- min(positive_values)
+#   max_pos <- max(positive_values)
+#   
+#   # Calculate the ratio of each positive value to 2 mg/L (/18)
+#   max_ratio <- min_pos / (2/18)
+#   min_ratio <- max_pos / (40/18)
+# 
+#   return(data.frame(max_ratio,min_ratio))
+# }
+# 
+# # Calculate the dilution factor for each column
+# dilution_factors <- sapply(Ceq_dataframe[, -1], calculate_dilution_factor)
+# 
+# # Display the dilution factors
+# print(dilution_factors)
+# 
+# # Range is 0.11 and 2.22 mM (2 - 40 mg/L)
+```
 
 ## Plotting
 
@@ -262,7 +489,7 @@ Q_Conc_Plot<- ggplot(ALL_Biochars,aes(x=NH4_Conc,y=Q_NH4, color = OC,border= OC,
     #geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
    # geom_errorbarh(aes(xmin=NH4_Conc-NH4_Conc_sd, xmax=NH4_Conc+NH4_Conc_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
-  xlab("Equilibrium Concentration (mmol)")+
+  xlab("Equilibrium Concentration (mM)")+
   ylab("Q (mmol NH4/g biochar)")+
   #ggtitle()+
   theme_classic(base_size = 28) +
@@ -300,7 +527,7 @@ Q_Act_Plot_3<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Q_NH4, color = OC,border= OC,
   geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
   geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
-  xlab("Equilibrium Activity (mmol)")+
+  xlab("Equilibrium Activity (mM)")+
   ylab("Q (mmol NH4/g biochar)")+
   #ggtitle("Sorption Isotherm")+
   theme_classic(base_size = 28) +
@@ -337,6 +564,170 @@ Q_Act_Plot_3 +
 Q_Act_Plot_3_zoomed
 ```
 
+### Surface Area Normalized Q
+
+```{r}
+
+
+Q_Act_Plot_SSA<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Q_NH4_SSA, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_errorbar(aes(ymin=Q_NH4_SSA-Q_NH4_SSA_sd, ymax=Q_NH4_SSA+Q_NH4_SSA_sd))+
+  geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mM)")+
+  ylab("Q (mmol NH4/m2 biochar)")+
+  #ggtitle("Sorption Isotherm")+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") 
+Q_Act_Plot_SSA
+```
+
+```{r}
+
+Q_Act_Plot_SSA_zoomed<-
+Q_Act_Plot_SSA +
+  coord_cartesian(xlim = c(75, 355), ylim = c(0,0.15))
+Q_Act_Plot_SSA_zoomed
+```
+
+### OC Normalized Plot
+
+```{r}
+
+Q_Act_Plot_OC<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Q_NH4_OC, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  #geom_errorbar(aes(ymin=Q_NH4_SSA-Q_NH4_SSA_sd, ymax=Q_NH4_SSA+Q_NH4_SSA_sd))+
+  #geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mM)")+
+  ylab("Q (mmol NH4/g biochar/ OC)")+
+  #ggtitle("Sorption Isotherm")+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") 
+Q_Act_Plot_OC
+```
+
+### Do Other cations 'inflect'?
+
+```{r}
+
+
+Q_Act_Plot_K<- ggplot(ALL_Biochars,aes(x=K_Act,y=Q_K, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mM)")+
+  ylab("Q (mmol ion/g biochar)")+
+  #ggtitle("Sorption Isotherm")+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-0.1,50))+
+  scale_y_continuous(expand = c(0,0), limits = c(-0.5,1))
+Q_Act_Plot_K
+```
+
+```{r}
+
+
+Q_Act_Plot_Na<- ggplot(ALL_Biochars,aes(x=Na_Act,y=Q_Na, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mM)")+
+  ylab("Q (mmol ion/g biochar)")+
+  #ggtitle("Sorption Isotherm")+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.8, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none")+
+  scale_x_continuous(expand = c(0,0), limits = c(50,200))+
+  scale_y_continuous(expand = c(0,0), limits = c(-2,1))
+Q_Act_Plot_Na
+```
+
+### Removal Efficiency
+
+```{r}
+
+Q_Conc_Plot<- ggplot(ALL_Biochars,aes(x= Dose,y= Rem_Eff, color=OC, border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+    #geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+   # geom_errorbarh(aes(xmin=NH4_Conc-NH4_Conc_sd, xmax=NH4_Conc+NH4_Conc_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Dose (g/L)")+
+  ylab("Removal Efficieny (%)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(1.2, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") 
+Q_Conc_Plot
+```
+
 ## Subsetting
 
 -   removing Q values greater or less that an arbitrary threshold
@@ -353,7 +744,7 @@ Q_Conc_Plot_subset <- ggplot(ALL_Biochars_subset, aes(x = NH4_Act, y = Q_NH4, co
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +  # shape = 21 provides a circle with a border
   geom_errorbar(aes(ymin = Q_NH4 - Q_NH4_sd, ymax = Q_NH4 + Q_NH4_sd)) +
   geom_errorbarh(aes(xmin = NH4_Act - NH4_Act_sd, xmax = NH4_Act + NH4_Act_sd)) +
-  xlab("Equilibrium Activity (mmol/L)") +
+  xlab("Equilibrium Activity (mM)") +
   ylab("Q (mmol NH4/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
@@ -397,7 +788,7 @@ Q_Conc_Plot_3b<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Q_NH4, color = XPS_OC, na.r
   geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
   geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+ 
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
-  xlab("Equilibrium Activity (mmol)")+
+  xlab("Equilibrium Activity (mM)")+
   ylab("Q (mmol NH4/g biochar")+
   #ggtitle("Sorption Isotherm")+
    theme_classic(base_size=18)+
