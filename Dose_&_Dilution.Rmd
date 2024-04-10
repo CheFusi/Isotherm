@@ -1,0 +1,45 @@
+---
+title: "Dilution_and_Dose"
+output: html_document
+date: "2024-04-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Libraries
+
+```{r, message=FALSE}
+
+
+libs_1<-c("tidyverse","knitr","psych","reshape2","rmarkdown")
+
+#data manipulation/exploration
+libs_2<-c("readxl","readr","tidyr","GGally","naniar","readr")
+
+
+# plotting
+libs_3<-c("ggplot2","viridis","ggpubr","cowplot")#,"ggthemr") 
+
+#ggpubr = package for publishing
+#cowplot=  #to create compounded figures
+
+#tables
+libs_4<-c("dplyr","stargazer","xlsx","ggplot2","scales","extrafont","writexl")
+
+libs <- c(libs_1, libs_2, libs_3, libs_4)
+
+# Suppress output unless there's an error
+invisible(lapply(libs, require, character.only = TRUE, quietly = TRUE))
+```
+
+### Combining Dose and Dilutions
+
+```{r}
+
+Dilution_Isotherm_All <- readRDS("Dilution_Isotherms_All.RDS")
+Dose_Isotherm_All <- readRDS("Dose_Isotherms_All.RDS")
+
+
+```

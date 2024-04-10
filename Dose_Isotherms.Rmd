@@ -1,0 +1,558 @@
+---
+title: "Dose_Isotherms"
+output: html_document
+date: "2024-04-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Molecular weight calculations
+
+```{r}
+
+MW_NH3=14.007+(3*1.008)
+MW_NH4=14.007+(4*1.008)
+MW_N = 14.007
+MW_H = 1.008
+MW_P = 30.974
+MW_S = 32.006
+MW_Na= 22.9
+MW_Mg= 24.305
+MW_K=39.098
+MW_Cl=35.45
+MW_C=12.011
+MW_S=32.06
+MW_O=15.999
+MW_SO4_T=MW_S+(4*MW_O)
+MW_H2PO4_T=MW_P+(4*MW_O)+(2*MW_H) ## because the formula uses H2PO4 and in the acidified sample we expect this form
+MW_Ac=(2*MW_C)+(3*MW_H)+(2*MW_O)
+MW_H2CO3=(MW_C+(3*MW_O)+(2*MW_H))
+```
+
+### Converting to mole
+
+```{r}
+
+moles_cat<-data.frame(MW_Na, MW_NH4, MW_K, MW_Mg)
+colnames(moles_cat) <- c("Sodium", "Ammonium", "Potassium", "Magnesium")
+
+moles_an<-data.frame(MW_Ac, MW_Cl, MW_H2PO4_T, MW_SO4_T, MW_H2CO3)
+colnames(moles_an) <- c("Acetate", "Chloride", "Phosphate", "Sulfate","Carbonate")
+```
+
+## Extracting Data from Excel Files
+
+```{r}
+
+xls <- excel_sheets("Dose_Isotherm_2.xlsx")
+
+# Filter sheet names that contain '_Cat'
+cat_sheets <- grep("_Cat", xls, value = TRUE)
+an_sheets <- grep("_An", xls, value = TRUE)
+pH_sheets <- grep("_pH", xls, value = TRUE)
+Alk_sheets <- grep("_Act", xls, value = TRUE)
+
+# Create a list to store dataframes
+df_cat <- list()
+df_an <- list()
+df_pH <- list()
+df_Alk <- list()
+
+
+# Read each cat sheet and store it in the list with the desired name
+
+#CATIONS
+for (sheet_name in cat_sheets) {
+  # Read the sheet
+  df <- read_excel("Dose_Isotherm_2.xlsx", sheet = sheet_name, na = "n.a.")
+  
+  # Extract the portion of the name for renaming
+  new_name_cat <- gsub(".*_([A-Z]{2}_\\d+_Cat)$", "\\1", sheet_name)
+  
+  # Assign the dataframe to the list with the new name
+  df_cat[[new_name_cat]] <- df
+  
+}
+
+#ANIONS
+for (sheet_name in an_sheets) {
+  # Read the sheet
+  df <- read_excel("Dose_Isotherm_2.xlsx", sheet = sheet_name, na = "n.a.")
+  
+  # Extract the portion of the name for renaming
+  new_name_an <- gsub(".*_([A-Z]{2}_\\d+_An)$", "\\1", sheet_name)
+  
+  # Assign the dataframe to the list with the new name
+  df_an[[new_name_an]] <- df
+  
+}
+
+#pH
+for (sheet_name in pH_sheets) {
+  # Read the sheet
+  df <- read_excel("Dose_Isotherm_2.xlsx", sheet = sheet_name, na = "n.a.")
+  
+  # Extract the portion of the name for renaming
+  new_name_pH <- gsub(".*_([A-Z]{2}_\\d+_pH)$", "\\1", sheet_name)
+  
+  # Assign the dataframe to the list with the new name
+  df_pH[[new_name_pH]] <- df
+  
+}
+
+#ALK
+for (sheet_name in an_sheets) {
+  # Read the sheet
+  df <- read_excel("Dose_Isotherm_2.xlsx", sheet = sheet_name, na = "n.a.")
+  
+  # Extract the portion of the name for renaming
+  new_name_Alk <- gsub(".*_([A-Z]{2}_\\d+_Alk)$", "\\1", sheet_name)
+  
+  # Assign the dataframe to the list with the new name
+  df_Alk[[new_name_Alk]] <- df
+  
+}
+```
+
+### Converting to Moles
+
+```{r}
+
+#converting to moles 
+
+
+# Iterate over each dataframe in the list
+for (name in names(df_cat)) {
+  # Extract the dataframe
+  df <- df_cat[[name]]
+  
+  # Iterate over each column in the moles_an dataframe
+  for (col_name in names(moles_cat)) {
+    # Create new column name by appending "_moles"
+    new_col_name <- paste0(col_name, "_moles")
+    
+    # Perform division and add new column to dataframe
+    df[[new_col_name]] <- df[[col_name]] / moles_cat[[col_name]]
+  }
+  
+  # Update the dataframe in the list
+  df_cat[[name]] <- df
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_an)) {
+  # Extract the dataframe
+  df <- df_an[[name]]
+  
+  # Iterate over each column in the moles_an dataframe
+  for (col_name in names(moles_an)) {
+    # Create new column name by appending "_moles"
+    new_col_name <- paste0(col_name, "_moles")
+    
+    # Perform division and add new column to dataframe
+    df[[new_col_name]] <- df[[col_name]] / moles_an[[col_name]]
+  }
+  
+  # Update the dataframe in the list
+  df_an[[name]] <- df
+}
+
+```
+
+### Equilibrium
+
+```{r}
+
+df_cat_eq <- list()
+df_an_eq <- list()
+df_pH_eq <- list()
+
+# Iterate over each dataframe in the list
+for (name in names(df_cat)) {
+  # Extract the dataframe
+  df <- df_cat[[name]]
+  
+  # Filter rows where the "Ox" column contains a number
+  numeric_rows <- grepl("\\d+", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_cat_eq[[name]] <- df[numeric_rows, ]
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_an)) {
+  # Extract the dataframe
+  df <- df_an[[name]]
+  
+  # Filter rows where the "Ox" column contains a number
+  numeric_rows <- grepl("\\d+", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_an_eq[[name]] <- df[numeric_rows, ]
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_pH)) {
+  # Extract the dataframe
+  df <- df_pH[[name]]
+  
+  # Filter rows where the "Ox" column contains a number
+  numeric_rows <- grepl("\\d+", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_pH_eq[[name]] <- df[numeric_rows, ]
+}
+```
+
+### Influents
+
+```{r}
+
+df_cat_in <- list()
+df_an_in <- list()
+df_pH_in <- list()
+
+# Iterate over each dataframe in the list
+for (name in names(df_cat)) {
+  # Extract the dataframe
+  df <- df_cat[[name]]
+  
+  # Filter rows where the "Ox" column contains a "IN"
+  numeric_rows <- grepl("IN", df$OX)& !grepl("FIN", df$OX)
+  
+  # Apply the filtering
+  df_filtered <- df[numeric_rows, ]
+  
+  # Repeat the entire dataframe five times
+  df_final <- df_filtered[rep(seq_len(nrow(df_filtered)), times = 5), ]
+  
+  # Store the filtered dataframe in the list
+  df_cat_in[[name]] <- df_final
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_an)) {
+  # Extract the dataframe
+  df <- df_an[[name]]
+  
+  # Filter rows where the "Ox" column contains a "IN"
+  numeric_rows <- grepl("IN", df$OX) & !grepl("FIN", df$OX)
+  
+  # Apply the filtering
+  df_filtered <- df[numeric_rows, ]
+  
+  # Repeat the entire dataframe five times
+  df_final <- df_filtered[rep(seq_len(nrow(df_filtered)), times = 5), ]
+  
+  # Store the filtered, repeated, and expanded dataframe in the list
+  df_an_in[[name]] <- df_final
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_pH)) {
+  # Extract the dataframe
+  df <- df_pH[[name]]
+  
+  # Filter rows where the "Ox" column contains a "IN"
+  numeric_rows <- grepl("IN", df$OX)& !grepl("FIN", df$OX)
+  
+  # Apply the filtering
+  df_filtered <- df[numeric_rows, ]
+  
+  # Repeat the entire dataframe five times
+  df_final <- df_filtered[rep(seq_len(nrow(df_filtered)), times = 5), ]
+  
+  # Store the filtered dataframe in the list
+  df_pH_in[[name]] <- df_final
+}
+```
+
+### Controls
+
+```{r}
+
+df_cat_ctrl <- list()
+df_an_ctrl <- list()
+df_pH_ctrl <- list()
+
+# Iterate over each dataframe in the list
+for (name in names(df_cat)) {
+  # Extract the dataframe
+  df <- df_cat[[name]]
+  
+  # Filter rows where the "Ox" column contains a "FIN"
+  numeric_rows <- grepl("FIN", df$OX)
+
+  # Apply the filtering
+  df_filtered <- df[numeric_rows, ]
+  
+  # Repeat the entire dataframe five times
+  df_final <- df_filtered[rep(seq_len(nrow(df_filtered)), times = 5), ]
+  
+  # Store the filtered dataframe in the list
+  df_cat_ctrl[[name]] <- df_final
+}
+
+
+# Iterate over each dataframe in the list
+for (name in names(df_an)) {
+  # Extract the dataframe
+  df <- df_an[[name]]
+  
+  # Filter rows where the "Ox" column contains a "FIN"
+  numeric_rows <- grepl("FIN", df$OX)
+
+  # Apply the filtering
+  df_filtered <- df[numeric_rows, ]
+  
+  # Repeat the entire dataframe five times
+  df_final <- df_filtered[rep(seq_len(nrow(df_filtered)), times = 5), ]
+  
+  # Store the filtered dataframe in the list
+  df_an_ctrl[[name]] <- df_final
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_pH)) {
+  # Extract the dataframe
+  df <- df_pH[[name]]
+  
+  # Filter rows where the "Ox" column contains a "FIN"
+  numeric_rows <- grepl("FIN", df$OX)
+
+  # Apply the filtering
+  df_filtered <- df[numeric_rows, ]
+  
+  # Repeat the entire dataframe five times
+  df_final <- df_filtered[rep(seq_len(nrow(df_filtered)), times = 5), ]
+  
+  # Store the filtered dataframe in the list
+  df_pH_ctrl[[name]] <- df_final
+}
+```
+
+## Mass and urine volume
+
+```{r}
+
+volume<-data.frame(volume=rep(c(0.0017),times=15))
+names(volume)="volume"
+
+
+mass_biochar<- data.frame(mass_biochar=rep(c(0.0085, 0.017, 0.034, 0.068, 0.119),each=3))
+names(mass_biochar) = "mass_biochar"
+```
+
+### Combining Cat, An, and pH for In, Eq, and Fin
+
+```{r}
+
+# Function to rename columns based on suffix
+rename_cols_suffix <- function(df, suffix) {
+  new_names <- paste0(names(df), "_", suffix)
+  names(df) <- new_names
+  return(df)
+}
+
+# Create a list to store combined dataframes
+combined_dfs <- list()
+
+# Get unique prefixes from dataframe names in df_an_in
+unique_prefixes <- unique(gsub("_An", "", names(df_an_in)))
+
+# Iterate over each unique prefix
+for (prefix in unique_prefixes) {
+  # Extract the dataframes from df_an_in
+  df_an_in_name <- df_an_in[[paste0(prefix, "_An")]]
+  df_an_eq_name <- df_an_eq[[paste0(prefix, "_An")]]
+  df_an_ctrl_name <- df_an_ctrl[[paste0(prefix, "_An")]]
+  
+  # Extract the dataframes from df_cat_in
+  df_cat_in_name <- df_cat_in[[paste0(prefix, "_Cat")]]
+  df_cat_eq_name <- df_cat_eq[[paste0(prefix, "_Cat")]]
+  df_cat_ctrl_name <- df_cat_ctrl[[paste0(prefix, "_Cat")]]
+  
+  # Rename columns with "_in" suffix
+  df_an_in_name <- rename_cols_suffix(df_an_in_name, "in")
+  df_cat_in_name <- rename_cols_suffix(df_cat_in_name, "in")
+  
+  # Rename columns with "_eq" suffix
+  df_an_eq_name <- rename_cols_suffix(df_an_eq_name, "eq")
+  df_cat_eq_name <- rename_cols_suffix(df_cat_eq_name, "eq")
+  
+  # Rename columns with "_ctrl" suffix
+  df_an_ctrl_name <- rename_cols_suffix(df_an_ctrl_name, "ctrl")
+  df_cat_ctrl_name <- rename_cols_suffix(df_cat_ctrl_name, "ctrl")
+  
+  # Combine columns from df_an_in, df_an_eq, df_an_ctrl, df_cat_in, and df_cat_ctrl into a single dataframe
+  combined_df <- cbind(df_an_eq_name, df_an_in_name[,-c(1:3)], df_an_ctrl_name[,-c(1:3)], df_cat_in_name[,-c(1:3)], df_cat_eq_name[,-c(1:3)], df_cat_ctrl_name[,-c(1:3)], mass_biochar, volume)
+  
+  # Add combined dataframe to the combined_dfs list under the original dataframe name prefix
+  combined_dfs[[prefix]] <- combined_df
+  
+  # Rename columns "OX_in", "ID_in", and "Rep_in"
+  colnames(combined_df)[colnames(combined_df) %in% c("OX_eq","ID_eq","Rep_eq")] <- c("OX","ID","Rep")
+  
+  # Add combined dataframe to the combined_dfs list under the original dataframe name prefix
+  combined_dfs[[prefix]] <- combined_df
+}
+```
+
+## Calculating Q of each Replicate
+
+need to take the average of the C_in's first!
+
+```{r}
+
+#include taking the average of the 3 Cin's first
+
+# Function to calculate Q values
+Q_function <- function(df, Q, C_In, C_eq, volume, m_s) {
+  df[[Q]] <- ((df[[C_In]] - df[[C_eq]]) * df[[volume]] / df[[m_s]])
+  return(df)
+}
+
+# Iterate over each dataframe in the list
+for (name in names(combined_dfs)) {
+  # Extract the dataframe
+  df <- combined_dfs[[name]]
+  
+  # Calculate Q values for each component
+  df <- Q_function(df, "Q_Na", "Sodium_moles_in", "Sodium_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_NH4", "Ammonium_moles_in", "Ammonium_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_K", "Potassium_moles_in", "Potassium_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_Ace", "Acetate_moles_in", "Acetate_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_Cl", "Chloride_moles_in", "Chloride_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_SO4", "Sulfate_moles_in", "Sulfate_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_PO4", "Phosphate_moles_in", "Phosphate_moles_eq", "volume", "mass_biochar")
+  
+  # Update the combined_dfs with the modified dataframe
+  combined_dfs[[name]] <- df
+}
+```
+
+## Statistics: Mean and Standard Deviation of Replicates
+
+```{r}
+
+# Create an empty dataframe to store the results
+averaged_df <- data.frame(Rep = unique(combined_dfs[[1]]$ID))  # Assuming Rep_eq is present in the first dataframe
+
+# Iterate over each column in the combined dataframe
+for (col_name in names(combined_dfs[[1]])) {
+  # Skip the Rep_in column
+  if (col_name == "Rep") {
+    next
+  }
+  
+  # Initialize vectors to store the mean and standard deviation
+  means <- c()
+  sds <- c()
+  
+  # Iterate over each group of 3 rows (replicates)
+  for (i in seq(1, nrow(combined_dfs[[1]]), by = 3)) {
+    # Extract the subset of rows for the current group
+    group <- combined_dfs[[1]][i:(i + 2), col_name]
+    
+    # Calculate mean and standard deviation
+    mean_value <- mean(group, na.rm = TRUE)
+    sd_value <- sd(group, na.rm = TRUE)
+    
+    # Append mean and standard deviation to vectors
+    means <- c(means, mean_value)
+    sds <- c(sds, sd_value)
+  }
+  
+  # Create new column names for mean and standard deviation
+  mean_col_name <- paste0(col_name, "_avg")
+  sd_col_name <- paste0(col_name, "_sd")
+  
+  # Add mean and standard deviation to the result dataframe
+  averaged_df[[mean_col_name]] <- means
+  averaged_df[[sd_col_name]] <- sds
+}
+
+```
+
+```{r}
+
+# Create an empty list to store the resulting dataframes
+averaged_dfs <- list()
+
+# Iterate over each dataframe in the combined_dfs list
+for (df_index in seq_along(combined_dfs)) {
+  # Create an empty dataframe to store the results
+  averaged_df <- data.frame(Rep = unique(combined_dfs[[df_index]]$ID))  # Assuming Rep_in is present in the dataframe
+  
+  # Iterate over each column in the current dataframe
+  for (col_name in names(combined_dfs[[df_index]])) {
+    # Skip the Rep_in column
+    if (col_name %in% c("Rep", "ID", "OX")) {
+      next
+    }
+    
+    # Initialize vectors to store the mean and standard deviation
+    means <- c()
+    sds <- c()
+    
+    # Iterate over each group of 3 rows (replicates)
+    for (i in seq(1, nrow(combined_dfs[[df_index]]), by = 3)) {
+      # Extract the subset of rows for the current group
+      group <- combined_dfs[[df_index]][i:(i + 2), col_name]
+      
+      # Calculate mean and standard deviation
+      mean_value <- mean(group, na.rm = TRUE)
+      sd_value <- sd(group, na.rm = TRUE)
+      
+      # Append mean and standard deviation to vectors
+      means <- c(means, mean_value)
+      sds <- c(sds, sd_value)
+    }
+    
+    # Create new column names for mean and standard deviation
+    mean_col_name <- paste0(col_name, "_avg")
+    sd_col_name <- paste0(col_name, "_sd")
+    
+    # Add mean and standard deviation to the result dataframe
+    averaged_df[[mean_col_name]] <- means
+    averaged_df[[sd_col_name]] <- sds
+  }
+  
+  # Add the averaged dataframe to the list
+  averaged_dfs[[df_index]] <- averaged_df
+}
+
+saveRDS(averaged_dfs, "Dose_Isotherms_All.RDS")
+```
+
+```{r}
+
+Dose_Isotherm_All <- readRDS("Dose_Isotherms_All.RDS")
+
+Q_Conc_Plot<- ggplot(Dose_Isotherm_All[[1]],aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )#+
+   # scale_x_continuous(expand = c(0.0,0), limits = c(0,600))+
+   # scale_y_continuous(expand = c(0,0), limits = c(0.0,2.3))
+Q_Conc_Plot
+```

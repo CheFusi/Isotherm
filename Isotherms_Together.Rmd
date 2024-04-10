@@ -358,98 +358,6 @@ ALL_Biochars<-ALL_Biochars%>%
 # ALL_Biochars$Q_Ace<-Q_function(ALL_Biochars,"Q_Ace","Ace_In","Ace_Conc","volume","mass_biochar")
 ```
 
-### Dilution based isotherm
-
-calculating the min and max sorption capacities for the biochars to determine the most dilute urine that would be informative.
-
-```{r}
-
-# creating a column that has Dose as character since some of the doses are repeating or long decimals and can't be filtered for if the Dose is in numeric form. 
-
-ALL_Biochars$Dose_chr <- as.character(ALL_Biochars$Dose)
-
-capacities<-ALL_Biochars%>%
-  filter(Dose_chr== "90.9090909090909") #%>%
-  #filter(Q_NH4>0)
-summary(capacities$Q_NH4)
-```
-
-### Dilutions for IC
-
-Determining the dilution factors for each biochar based on the sorption density at the 91 Dose
-
-```{r}
-# 
-capacities_2 <- capacities %>% select("Q_NH4","Type_ox")
-
-Cin <- 9000
-C_min <- 5500
-
-#possible urine concentrations (C_in)
-poss_urine_conc <- as.data.frame(rev(c(seq(from = C_min, to = Cin, length.out = 10))))
-
-#round to the nearest hundredth
-poss_urine_conc_mg <- round(poss_urine_conc/100)*100
-
-#poss_urine_conc <- as.data.frame( c(Cin, 8000, 7000, 6000, 5000, 4000, 3000, 2500, 2000))
-poss_urine_conc <- poss_urine_conc_mg/18
-names(poss_urine_conc) <- "urine_conc"
-
-#calculate C_eq
-
-# Define a function to calculate Ceq for a given Q value
-calculate_Ceq <- function(Q, Cin, M, V) {
-    return(Cin - (Q * (M / V)))
-}
-
-# Define a function to calculate Volume of full strength urine for given Cin values
-calculate_V1 <- function(Cin,C2,V2) {
-    return(C2*V2/(Cin/18))
-}
-
-calculate_MQ <- function(V1) {
-    return(V2-V1)
-}
-
-# M and V are the mass of biochar and volume of urine
-M <-  0.2
-V <-  0.0011
-V2 <- 50
-
-Ceq_list <- lapply(1:nrow(capacities_2), function(i) {
-    Q <- capacities_2$Q_NH4[i]
-    Type_ox <- capacities_2$Type_ox[i]
-    Ceq <- calculate_Ceq(Q, poss_urine_conc$urine_conc, M, V)
-    V1 <- calculate_V1(Cin, poss_urine_conc$urine_conc, V2)
-    MQ <- calculate_MQ(V1)
-    return(data.frame(Ceq,V1,MQ, row.names = NULL, check.names = FALSE))
-})
-
-names(Ceq_list) <- sapply(1:nrow(capacities_2), function(i) {
-    Type_ox <- capacities_2$Type_ox[i]
-    paste0(Type_ox)  # Create column name for Ceq values based on Q and Type_ox
-})
-
-
-df_list <- lapply(names(Ceq_list), function(x) {
-  df <- as.data.frame(Ceq_list[[x]])
-  names(df) <- paste0(x, "_", names(df))
-  return(df)
-})
-
-# Combine data frames into a single data frame
-Ceq_dataframe <- do.call(cbind, df_list)
-
-# Add Cin column from poss_urine_conc dataframe
-Ceq_dataframe$Cin <- poss_urine_conc$urine_conc
-Ceq_dataframe$Cin_mg <- 18*poss_urine_conc$urine_conc
-
-# Reorder columns to have Cin as the first column
-Ceq_dataframe <- Ceq_dataframe[c("Cin","Cin_mg", names(Ceq_dataframe[, -c((ncol(Ceq_dataframe) - 1):ncol(Ceq_dataframe))]))] #selecting all but the last two columns 
-
-Ceq_dataframe<- round(Ceq_dataframe,0)
-```
-
 ```{r}
 # 
 # # Function to determine the dilution factor for a column
@@ -474,6 +382,8 @@ Ceq_dataframe<- round(Ceq_dataframe,0)
 # print(dilution_factors)
 # 
 # # Range is 0.11 and 2.22 mM (2 - 40 mg/L)
+
+
 ```
 
 ## Plotting

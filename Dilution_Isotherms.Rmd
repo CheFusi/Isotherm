@@ -1,0 +1,1009 @@
+---
+title: "Dilution_Isotherms"
+output: html_document
+date: "2024-04-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load Libraries
+
+```{r, message=FALSE}
+
+
+libs_1<-c("tidyverse","knitr","psych","reshape2","rmarkdown")
+
+#data manipulation/exploration
+libs_2<-c("readxl","readr","tidyr","GGally","naniar","readr")
+
+
+# plotting
+libs_3<-c("ggplot2","viridis","ggpubr","cowplot")#,"ggthemr") 
+
+#ggpubr = package for publishing
+#cowplot=  #to create compounded figures
+
+#tables
+libs_4<-c("dplyr","stargazer","xlsx","ggplot2","scales","extrafont","writexl")
+
+libs <- c(libs_1, libs_2, libs_3, libs_4)
+
+# Suppress output unless there's an error
+invisible(lapply(libs, require, character.only = TRUE, quietly = TRUE))
+```
+
+### Dilution based isotherm
+
+calculating the min and max sorption capacities for the biochars to determine the most dilute urine that would be informative.
+
+```{r}
+
+ALL_Biochars <-readRDS("ALL_Biochars.RDS")
+# creating a column that has Dose as character since some of the doses are repeating or long decimals and can't be filtered for if the Dose is in numeric form. 
+
+ALL_Biochars$Dose_chr <- as.character(ALL_Biochars$Dose)
+
+capacities<-ALL_Biochars%>%
+  filter(Dose_chr== "90.9090909090909") #%>%
+  #filter(Q_NH4>0)
+summary(capacities$Q_NH4)
+```
+
+### Dilutions for IC
+
+Determining the dilution factors for each biochar based on the sorption density at the 91 Dose
+
+```{r}
+# 
+capacities_2 <- capacities %>% select("Q_NH4","Type_ox")
+
+Cin <- 8500
+C_min <- 2000
+
+#used for AK_30 trial C_in <- 5500
+
+#possible urine concentrations (C_in)
+poss_urine_conc <- as.data.frame(rev(c(seq(from = C_min, to = Cin, length.out = 10))))
+
+#round to the nearest hundredth
+poss_urine_conc_mg <- round(poss_urine_conc/100)*100
+
+#poss_urine_conc <- as.data.frame( c(Cin, 8000, 7000, 6000, 5000, 4000, 3000, 2500, 2000))
+poss_urine_conc <- poss_urine_conc_mg/18
+names(poss_urine_conc) <- "urine_conc"
+
+#calculate C_eq
+
+# Define a function to calculate Ceq for a given Q value
+calculate_Ceq <- function(Q, Cin, M, V) {
+    return(Cin - (Q * (M / V)))
+}
+
+# Define a function to calculate Volume of full strength urine for given Cin values
+calculate_V1 <- function(Cin,C2,V2) {
+    return(C2*V2/(Cin/18))
+}
+
+calculate_MQ <- function(V1) {
+    return(V2-V1)
+}
+
+# M and V are the mass of biochar and volume of urine
+M <-  0.2
+V <-  0.0011
+V2 <- 50
+
+Ceq_list <- lapply(1:nrow(capacities_2), function(i) {
+    Q <- capacities_2$Q_NH4[i]
+    Type_ox <- capacities_2$Type_ox[i]
+    Ceq <- calculate_Ceq(Q, poss_urine_conc$urine_conc, M, V)
+    V1 <- calculate_V1(Cin, poss_urine_conc$urine_conc, V2)
+    MQ <- calculate_MQ(V1)
+    return(data.frame(Ceq,V1,MQ, row.names = NULL, check.names = FALSE))
+})
+
+names(Ceq_list) <- sapply(1:nrow(capacities_2), function(i) {
+    Type_ox <- capacities_2$Type_ox[i]
+    paste0(Type_ox)  # Create column name for Ceq values based on Q and Type_ox
+})
+
+
+df_list <- lapply(names(Ceq_list), function(x) {
+  df <- as.data.frame(Ceq_list[[x]])
+  names(df) <- paste0(x, "_", names(df))
+  return(df)
+})
+
+# Combine data frames into a single data frame
+Ceq_dataframe <- do.call(cbind, df_list)
+
+# Add Cin column from poss_urine_conc dataframe
+Ceq_dataframe$Cin <- poss_urine_conc$urine_conc
+Ceq_dataframe$Cin_mg <- 18*poss_urine_conc$urine_conc
+
+# Reorder columns to have Cin as the first column
+Ceq_dataframe <- Ceq_dataframe[c("Cin","Cin_mg", names(Ceq_dataframe[, -c((ncol(Ceq_dataframe) - 1):ncol(Ceq_dataframe))]))] #selecting all but the last two columns 
+
+Ceq_dataframe<- round(Ceq_dataframe,0)
+
+# To View and copy over the data needed for diluting urine
+
+#View(Ceq_dataframe %>% 
+#  select(contains("Cin")|contains("AK_30")))
+
+View(Ceq_dataframe %>% 
+  select(contains("Cin")|contains("AM_15")|contains("AK_05")|contains("AK_10")|contains("AK_30")))
+```
+
+Plotting to see how Ceq performs relative to predicted
+
+```{r}
+
+Dilution_Isotherms_All <-readRDS("Dilution_Isotherms_All.RDS")
+#plot(Ceq_dataframe$AK_30_Ceq,Dilution_Isotherms_All[[1]]$Ammonium_moles_eq_avg)
+# Add a 1:1 line
+#abline(a = 0, b = 1, col = "red")
+```
+
+### Molecular weight calculations
+
+```{r}
+
+MW_NH3=14.007+(3*1.008)
+MW_NH4=14.007+(4*1.008)
+MW_N = 14.007
+MW_H = 1.008
+MW_P = 30.974
+MW_S = 32.006
+MW_Na= 22.9
+MW_Mg= 24.305
+MW_K=39.098
+MW_Cl=35.45
+MW_C=12.011
+MW_S=32.06
+MW_O=15.999
+MW_SO4_T=MW_S+(4*MW_O)
+MW_H2PO4_T=MW_P+(4*MW_O)+(2*MW_H) ## because the formula uses H2PO4 and in the acidified sample we expect this form
+MW_Ac=(2*MW_C)+(3*MW_H)+(2*MW_O)
+MW_H2CO3=(MW_C+(3*MW_O)+(2*MW_H))
+```
+
+### Converting to mole
+
+```{r}
+
+moles_cat<-data.frame(MW_Na, MW_NH4, MW_K, MW_Mg)
+colnames(moles_cat) <- c("Sodium", "Ammonium", "Potassium", "Magnesium")
+
+moles_an<-data.frame(MW_Ac, MW_Cl, MW_H2PO4_T, MW_SO4_T, MW_H2CO3)
+colnames(moles_an) <- c("Acetate", "Chloride", "Phosphate", "Sulfate","Carbonate")
+```
+
+### Setting up mass of biochar and volume of urine dataframe
+
+```{r}
+
+volume<-rep(c(0.0017),times=30)
+volume<-data.frame(volume)
+
+mass_biochar<-rep(c(0.155),times=30)
+mass_biochar<-data.frame(mass_biochar)
+```
+
+## Extracting Data from Excel Files
+
+```{r}
+
+# Load the Excel file
+xls <- excel_sheets("Dilution_Isotherms.xlsx")
+
+# Filter sheet names that contain '_Cat'
+cat_sheets <- grep("_Cat", xls, value = TRUE)
+an_sheets <- grep("_An", xls, value = TRUE)
+pH_sheets <- grep("_pH", xls, value = TRUE)
+Alk_sheets <- grep("_Alk", xls, value = TRUE)
+
+# Create a list to store dataframes
+df_cat <- list()
+df_an <- list()
+df_pH <- list()
+df_Alk <- list()
+
+
+# Read each cat sheet and store it in the list with the desired name
+
+#CATIONS
+for (sheet_name in cat_sheets) {
+  # Read the sheet
+  df <- read_excel("Dilution_Isotherms.xlsx", sheet = sheet_name, na = "n.a.")
+  
+  # Extract the portion of the name for renaming
+  new_name_cat <- gsub(".*_([A-Z]{2}_\\d+_Cat)$", "\\1", sheet_name)
+  
+  # Assign the dataframe to the list with the new name
+  df_cat[[new_name_cat]] <- df
+  
+}
+
+#ANIONS
+for (sheet_name in an_sheets) {
+  # Read the sheet
+  df <- read_excel("Dilution_Isotherms.xlsx", sheet = sheet_name, na = "n.a.")
+  
+  # Extract the portion of the name for renaming
+  new_name_an <- gsub(".*_([A-Z]{2}_\\d+_An)$", "\\1", sheet_name)
+  
+  # Assign the dataframe to the list with the new name
+  df_an[[new_name_an]] <- df
+  
+}
+
+#pH
+for (sheet_name in pH_sheets) {
+  # Read the sheet
+  df <- read_excel("Dilution_Isotherms.xlsx", sheet = sheet_name, na = "n.a.")
+  
+  # Extract the portion of the name for renaming
+  new_name_pH <- gsub(".*_([A-Z]{2}_\\d+_pH)$", "\\1", sheet_name)
+  
+  # Assign the dataframe to the list with the new name
+  df_pH[[new_name_pH]] <- df
+  
+}
+
+#ALK
+for (sheet_name in an_sheets) {
+  # Read the sheet
+  df <- read_excel("Dilution_Isotherms.xlsx", sheet = sheet_name, na = "n.a.")
+  
+  # Extract the portion of the name for renaming
+  new_name_Alk <- gsub(".*_([A-Z]{2}_\\d+_Alk)$", "\\1", sheet_name)
+  
+  # Assign the dataframe to the list with the new name
+  df_Alk[[new_name_Alk]] <- df
+  
+}
+```
+
+### Converting to Moles
+
+```{r}
+
+#converting to moles 
+
+
+# Iterate over each dataframe in the list
+for (name in names(df_cat)) {
+  # Extract the dataframe
+  df <- df_cat[[name]]
+  
+  # Iterate over each column in the moles_an dataframe
+  for (col_name in names(moles_cat)) {
+    # Create new column name by appending "_moles"
+    new_col_name <- paste0(col_name, "_moles")
+    
+    # Perform division and add new column to dataframe
+    df[[new_col_name]] <- df[[col_name]] / moles_cat[[col_name]]
+  }
+  
+  # Update the dataframe in the list
+  df_cat[[name]] <- df
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_an)) {
+  # Extract the dataframe
+  df <- df_an[[name]]
+  
+  # Iterate over each column in the moles_an dataframe
+  for (col_name in names(moles_an)) {
+    # Create new column name by appending "_moles"
+    new_col_name <- paste0(col_name, "_moles")
+    
+    # Perform division and add new column to dataframe
+    df[[new_col_name]] <- df[[col_name]] / moles_an[[col_name]]
+  }
+  
+  # Update the dataframe in the list
+  df_an[[name]] <- df
+}
+
+```
+
+### Equilibrium
+
+```{r}
+
+df_cat_eq <- list()
+df_an_eq <- list()
+df_pH_eq <- list()
+
+# Iterate over each dataframe in the list
+for (name in names(df_cat)) {
+  # Extract the dataframe
+  df <- df_cat[[name]]
+  
+  # Filter rows where the "Ox" column contains a number
+  numeric_rows <- grepl("\\d+", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_cat_eq[[name]] <- df[numeric_rows, ]
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_an)) {
+  # Extract the dataframe
+  df <- df_an[[name]]
+  
+  # Filter rows where the "Ox" column contains a number
+  numeric_rows <- grepl("\\d+", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_an_eq[[name]] <- df[numeric_rows, ]
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_pH)) {
+  # Extract the dataframe
+  df <- df_pH[[name]]
+  
+  # Filter rows where the "Ox" column contains a number
+  numeric_rows <- grepl("\\d+", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_pH_eq[[name]] <- df[numeric_rows, ]
+}
+```
+
+### Influents
+
+```{r}
+
+df_cat_in <- list()
+df_an_in <- list()
+df_pH_in <- list()
+
+# Iterate over each dataframe in the list
+for (name in names(df_cat)) {
+  # Extract the dataframe
+  df <- df_cat[[name]]
+  
+  # Filter rows where the "Ox" column contains a "IN"
+  numeric_rows <- grepl("IN", df$OX)& !grepl("FIN", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_cat_in[[name]] <- df[numeric_rows, ]
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_an)) {
+  # Extract the dataframe
+  df <- df_an[[name]]
+  
+  # Filter rows where the "Ox" column contains a "IN"
+  numeric_rows <- grepl("IN", df$OX)& !grepl("FIN", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_an_in[[name]] <- df[numeric_rows, ]
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_pH)) {
+  # Extract the dataframe
+  df <- df_pH[[name]]
+  
+  # Filter rows where the "Ox" column contains a "IN"
+  numeric_rows <- grepl("IN", df$OX)& !grepl("FIN", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_pH_in[[name]] <- df[numeric_rows, ]
+}
+```
+
+### Controls
+
+```{r}
+
+df_cat_ctrl <- list()
+df_an_ctrl <- list()
+df_pH_ctrl <- list()
+
+# Iterate over each dataframe in the list
+for (name in names(df_cat)) {
+  # Extract the dataframe
+  df <- df_cat[[name]]
+  
+  # Filter rows where the "Ox" column contains a "FIN"
+  numeric_rows <- grepl("FIN", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_cat_ctrl[[name]] <- df[numeric_rows, ]
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_an)) {
+  # Extract the dataframe
+  df <- df_an[[name]]
+  
+  # Filter rows where the "Ox" column contains a "FIN"
+  numeric_rows <- grepl("FIN", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_an_ctrl[[name]] <- df[numeric_rows, ]
+}
+
+# Iterate over each dataframe in the list
+for (name in names(df_pH)) {
+  # Extract the dataframe
+  df <- df_pH[[name]]
+  
+  # Filter rows where the "Ox" column contains a "FIN"
+  numeric_rows <- grepl("FIN", df$OX)
+  
+  # Store the filtered dataframe in the list
+  df_pH_ctrl[[name]] <- df[numeric_rows, ]
+}
+```
+
+### Taking the Average of the Influents and Controls
+
+```{r}
+
+# Iterate over each dataframe in the list
+for (name in names(df_cat_in)) {
+  # Extract the dataframe
+  df <- df_cat_in[[name]]
+  
+  # Create an index for grouping every three rows
+  group_index <- df$ID
+  
+  # Calculate row-wise averages for every three rows (excluding "Rep" column)
+  #avg_values <- tapply(rowMeans(df[, !colnames(df) %in% c("OX", "ID", "Rep")], na.rm = TRUE), group_index, mean)
+  # Calculate row-wise averages for every three rows (excluding "Rep", "ID", and "OX" columns)
+avg_values <- aggregate(. ~ ID, df[, !colnames(df) %in% c("OX", "ID", "Rep")], mean, na.rm = TRUE)
+  print(avg_values)
+  
+  # Repeat the averages within each group of three rows to match the number of rows in the dataframe
+  #repeated_avg_values <- rep(avg_values, each = 3)
+  # Repeat the averaged values within each group of three rows to match the number of rows in the dataframe
+repeated_avg_values <- rep(avg_values[match(group_index, avg_values$ID), -1], each = 3)
+
+  print(repeated_avg_values)
+  
+  # Iterate over each column (excluding "Rep", "OX", and "ID")
+  for (col_name in names(df)) {
+    if (!(col_name %in% c("Rep", "OX", "ID"))) {
+      # Create a new column name for the averaged values
+      new_col_name <- paste0(col_name, "_rep_avg")
+      
+      # Create a new column with repeated averaged values
+      df[[new_col_name]] <- repeated_avg_values
+    }
+  }
+  
+  # Or save the updated dataframe back to the list
+  df_cat_in[[name]] <- df
+}
+```
+
+```{r}
+
+avg_values <- tapply(rowMeans(df_cat_in[["AK_30_Cat"]][, !colnames(df_cat_in[["AK_30_Cat"]]) %in% c("OX", "ID", "Rep")], na.rm = TRUE), group_index, mean)
+```
+
+## Mass and urine volume
+
+```{r}
+
+volume<-data.frame(volume=rep(c(0.0017),times=30))
+names(volume)="volume"
+mass_biochar<- data.frame(mass_biochar=rep(c(0.15454),times=30))
+names(mass_biochar) = "mass_biochar"
+```
+
+### Combining Cat, An, and pH for In, Eq, and Fin
+
+```{r}
+
+# Function to rename columns based on suffix
+rename_cols_suffix <- function(df, suffix) {
+  new_names <- paste0(names(df), "_", suffix)
+  names(df) <- new_names
+  return(df)
+}
+
+# Create a list to store combined dataframes
+combined_dfs <- list()
+
+# Get unique prefixes from dataframe names in df_an_in
+unique_prefixes <- unique(gsub("_An", "", names(df_an_in)))
+
+# Iterate over each unique prefix
+for (prefix in unique_prefixes) {
+  # Extract the dataframes from df_an_in
+  df_an_in_name <- df_an_in[[paste0(prefix, "_An")]]
+  df_an_eq_name <- df_an_eq[[paste0(prefix, "_An")]]
+  df_an_ctrl_name <- df_an_ctrl[[paste0(prefix, "_An")]]
+  
+  # Extract the dataframes from df_cat_in
+  df_cat_in_name <- df_cat_in[[paste0(prefix, "_Cat")]]
+  df_cat_eq_name <- df_cat_eq[[paste0(prefix, "_Cat")]]
+  df_cat_ctrl_name <- df_cat_ctrl[[paste0(prefix, "_Cat")]]
+  
+  # Rename columns with "_in" suffix
+  df_an_in_name <- rename_cols_suffix(df_an_in_name, "in")
+  df_cat_in_name <- rename_cols_suffix(df_cat_in_name, "in")
+  
+  # Rename columns with "_eq" suffix
+  df_an_eq_name <- rename_cols_suffix(df_an_eq_name, "eq")
+  df_cat_eq_name <- rename_cols_suffix(df_cat_eq_name, "eq")
+  
+  # Rename columns with "_ctrl" suffix
+  df_an_ctrl_name <- rename_cols_suffix(df_an_ctrl_name, "ctrl")
+  df_cat_ctrl_name <- rename_cols_suffix(df_cat_ctrl_name, "ctrl")
+  
+  # Combine columns from df_an_in, df_an_eq, df_an_ctrl, df_cat_in, and df_cat_ctrl into a single dataframe
+  combined_df <- cbind(df_an_in_name, df_an_eq_name[,-c(1:3)], df_an_ctrl_name[,-c(1:3)], df_cat_in_name[,-c(1:3)], df_cat_eq_name[,-c(1:3)], df_cat_ctrl_name[,-c(1:3)], mass_biochar, volume)
+  
+  # Rename columns "OX_in", "ID_in", and "Rep_in"
+  colnames(combined_df)[colnames(combined_df) %in% c("OX_in","ID_in","Rep_in")] <- c("OX","ID","Rep")
+  
+  # Add combined dataframe to the combined_dfs list under the original dataframe name prefix
+  combined_dfs[[prefix]] <- combined_df
+}
+```
+
+## Calculating Q of each Replicate
+
+```{r}
+
+# Function to calculate Q values
+Q_function <- function(df, Q, C_In, C_eq, volume, m_s) {
+  df[[Q]] <- ((df[[C_In]] - df[[C_eq]]) * df[[volume]] / df[[m_s]])
+  return(df)
+}
+
+# Iterate over each dataframe in the list
+for (name in names(combined_dfs)) {
+  # Extract the dataframe
+  df <- combined_dfs[[name]]
+  
+  # Calculate Q values for each component
+  df <- Q_function(df, "Q_Na", "Sodium_moles_in", "Sodium_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_NH4", "Ammonium_moles_in", "Ammonium_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_K", "Potassium_moles_in", "Potassium_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_Ace", "Acetate_moles_in", "Acetate_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_Cl", "Chloride_moles_in", "Chloride_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_SO4", "Sulfate_moles_in", "Sulfate_moles_eq", "volume", "mass_biochar")
+  df <- Q_function(df, "Q_PO4", "Phosphate_moles_in", "Phosphate_moles_eq", "volume", "mass_biochar")
+  
+  # Update the combined_dfs with the modified dataframe
+  combined_dfs[[name]] <- df
+}
+```
+
+## Statistics: Mean and Standard Deviation of Replicates
+
+```{r}
+
+# Create an empty dataframe to store the results
+averaged_df <- data.frame(Rep = unique(combined_dfs[[1]]$ID))  # Assuming Rep_in is present in the first dataframe
+
+# Iterate over each column in the combined dataframe
+for (col_name in names(combined_dfs[[1]])) {
+  # Skip the Rep_in column
+  if (col_name %in% c("Rep")) {
+    next
+  }
+  
+  # Initialize vectors to store the mean and standard deviation
+  means <- c()
+  sds <- c()
+  
+  # Iterate over each group of 3 rows (replicates)
+  for (i in seq(1, nrow(combined_dfs[[1]]), by = 3)) {
+    # Extract the subset of rows for the current group
+    group <- combined_dfs[[1]][i:(i + 2), col_name]
+    
+    # Calculate mean and standard deviation
+    mean_value <- mean(group, na.rm = TRUE)
+    sd_value <- sd(group, na.rm = TRUE)
+    
+    # Append mean and standard deviation to vectors
+    means <- c(means, mean_value)
+    sds <- c(sds, sd_value)
+  }
+  
+  # Create new column names for mean and standard deviation
+  mean_col_name <- paste0(col_name, "_avg")
+  sd_col_name <- paste0(col_name, "_sd")
+  
+  # Add mean and standard deviation to the result dataframe
+  averaged_df[[mean_col_name]] <- means
+  averaged_df[[sd_col_name]] <- sds
+}
+
+```
+
+```{r}
+
+# Create an empty list to store the resulting dataframes
+averaged_dfs <- list()
+
+# Iterate over each dataframe in the combined_dfs list
+for (df_index in seq_along(combined_dfs)) {
+  # Create an empty dataframe to store the results
+  averaged_df <- data.frame(Rep = unique(combined_dfs[[df_index]]$ID))  # Assuming Rep_in is present in the dataframe
+  
+  # Iterate over each column in the current dataframe
+  for (col_name in names(combined_dfs[[df_index]])) {
+    # Skip the Rep_in column
+    if (col_name == c("Rep", "ID","OX") {
+      next
+    }
+    
+    # Initialize vectors to store the mean and standard deviation
+    means <- c()
+    sds <- c()
+    
+    # Iterate over each group of 3 rows (replicates)
+    for (i in seq(1, nrow(combined_dfs[[df_index]]), by = 3)) {
+      # Extract the subset of rows for the current group
+      group <- combined_dfs[[df_index]][i:(i + 2), col_name]
+      
+      # Calculate mean and standard deviation
+      mean_value <- mean(group, na.rm = TRUE)
+      sd_value <- sd(group, na.rm = TRUE)
+      
+      # Append mean and standard deviation to vectors
+      means <- c(means, mean_value)
+      sds <- c(sds, sd_value)
+    }
+    
+    # Create new column names for mean and standard deviation
+    mean_col_name <- paste0(col_name, "_avg")
+    sd_col_name <- paste0(col_name, "_sd")
+    
+    # Add mean and standard deviation to the result dataframe
+    averaged_df[[mean_col_name]] <- means
+    averaged_df[[sd_col_name]] <- sds
+  }
+  
+  # Add the averaged dataframe to the list
+  averaged_dfs[[df_index]] <- averaged_df
+}
+
+saveRDS(averaged_dfs, "Dilution_Isotherms_All.RDS")
+
+```
+
+### Plotting
+
+```{r}
+
+Dilution_Isotherm_All <- readRDS("Dilution_Isotherms_All.RDS")
+
+Q_Conc_Plot<- ggplot(averaged_dfs[[1]],aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,300))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,2.3))
+Q_Conc_Plot
+```
+
+```{r}
+
+plot(Ceq_dataframe$AK_15_Ceq,averaged_dfs[[1]]$Ammonium_moles_eq_avg)
+# Add a 1:1 line
+abline(a = 0, b = 1, col = "red")
+```
+
+## Influent (3) Statistics in moles
+
+```{r}
+
+#-------------------------------------------------------------------------------
+# CATIONS
+# influent samples to long format for easier manipulation
+Cations_in_mol_long<-
+  Cations_in_mol%>%
+  pivot_longer(
+    cols=c(Sodium,Ammonium,Potassium,Magnesium),
+    names_to ="Cation_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5%)
+Cations_in_mol_stats <- Cations_in_mol_long %>%
+  group_by(Cation_Species) %>%
+  summarise(in_mean=mean(Concentration,na.rm=FALSE),
+            #.groups='rowwise',
+            in_std=sd(Concentration, na.rm=FALSE),
+            in_perc_std=in_std/ in_mean*100)
+Cations_in_mol_stats<-data.frame(Cations_in_mol_stats)
+
+#-------------------------------------------------------------------------------
+# ANIONS
+# influent samples to long format for easier manipulation
+Anions_in_mol_long<-
+  Anions_in_mol%>%
+  pivot_longer(
+    cols=c(Acetate,Chloride,Phosphate,Sulfate,Carbonate),
+    names_to ="Anion_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5%)
+Anions_in_mol_stats <- Anions_in_mol_long %>%
+  group_by(Anion_Species) %>%
+  summarise(in_mean=mean(Concentration,na.rm=FALSE),
+            #.groups='rowwise',
+            in_std=sd(Concentration, na.rm=FALSE),
+            in_perc_std=in_std/ in_mean*100)
+Anions_in_mol_stats<-data.frame(Anions_in_mol_stats)
+#-------------------------------------------------------------------------------
+```
+
+## Control Statistics
+
+```{r}
+
+# CATIONS 
+
+#pivoting
+Cations_ctrl_mol_long<-
+  Cations_ctrl_mol%>%
+  pivot_longer(
+    cols=c(Sodium,Ammonium,Potassium,Magnesium),
+    names_to ="Cation_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5%)
+Cations_ctrl_mol_stats <- Cations_ctrl_mol_long %>%
+  group_by(Cation_Species) %>%
+  summarise(ctrl_mean=mean(Concentration,na.rm=TRUE),
+            #.groups='rowwise',
+            ctrl_std=sd(Concentration, na.rm=TRUE),
+            perc_std=ctrl_std/ ctrl_mean*100)
+Cations_ctrl_mol_stats<-data.frame(Cations_ctrl_mol_stats)
+
+# ANIONS
+Anions_ctrl_mol_long<-
+  Anions_ctrl_mol%>%
+  pivot_longer(
+    cols=c(Acetate,Chloride,Phosphate,Sulfate,Carbonate),
+    names_to ="Anion_Species",
+    values_to="Concentration",
+    names_repair="minimal")
+
+#calculating the mean and stdev to make sure that variability is acceptable (<5%)
+Anions_ctrl_mol_stats <- Anions_ctrl_mol_long %>%
+  group_by(Anion_Species) %>%
+  summarise(ctrl_mean=mean(Concentration,na.rm=FALSE),
+            #.groups='rowwise',
+            ctrl_std=sd(Concentration, na.rm=FALSE),
+            ctrl_perc_std=ctrl_std/ ctrl_mean*100)
+Anions_ctrl_mol_stats<-data.frame(Anions_ctrl_mol_stats)
+
+```
+
+## Combining All concentration triplicates into One Large Data Frame
+
+##Combining Anions and Cations into One Dataframe for PHREEQC
+
+-   all the molar concentration of the ions, in triplicate, combined into one dataframe
+
+-   saving the dataframe as an excel file that can be imported into PHREEQC to calculate equilibrium activity.
+
+```{r}
+
+#Combining cations and anions into one dataframe for convenient activity calculations
+
+#----------------------------------------------------------------------
+Phreeqc_num<-data.frame(seq(1,nrow(Cations_all_mol)))
+colnames(Phreeqc_num)<-("Number")
+
+int_iso_all <- data.frame(rbind(Cations_all_mol[,]),
+                           Anions_all_mol[,-c(1:3)],
+                           pH[,4])
+int_iso_all<-data.frame(cbind(Phreeqc_num[,],int_iso_all))
+colnames(int_iso_all)<-as.character(c("PHREEQC_number",'Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate', "pH"))
+
+
+int_iso_all_for_PHREEQC<-data.frame(int_iso_all[,c(1,5:14)])
+
+colnames(int_iso_all_for_PHREEQC) = c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
+
+write.table(int_iso_all_for_PHREEQC,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/int_iso_all_for_PHREEQC.txt", sep = "\t",
+            row.names = FALSE, col.names = FALSE)
+#----------------------------------------------------------------------
+```
+
+##PHREEQC
+
+## Activities
+
+```{r}
+
+int_iso_Act_Ion_str<- data.frame((FullSheet$"Act"[c(1:51),c(4:7)]))
+
+int_iso_Act_Ion_str[,c(2:4)]<-1000*(10^(int_iso_Act_Ion_str[,c(2:4)]))
+colnames(int_iso_Act_Ion_str)<-as.character(c("Ionic_str","Act_NH4","Act_Na","Act_K"))
+
+
+df_All<- data.frame(cbind(int_iso_Act_Ion_str, int_iso_all))
+```
+
+## Nov 2023 Edits
+
+-   In is just in, not avg of in and ctrl - started to fix this but ended up still using the avg value
+
+-   #overide definition of In
+
+```{r}
+
+#Cations
+
+Cat_In <- Cations_in_mol_stats[,c(1:3)] %>%
+  pivot_wider(names_from = Cation_Species, values_from = c(in_mean, in_std))
+
+Cat_In<-data.frame(data.frame(lapply(Cat_In,rep,times=51)))
+
+colnames(Cat_In)<-c("NH4_In","Mg_In","K_In","Na_In","NH4_std","Mg_std","K_std","Na_std")
+
+#Anions
+
+An_In <- Anions_in_mol_stats[,c(1:3)] %>%
+  pivot_wider(names_from = Anion_Species, values_from = c(in_mean, in_std))
+
+An_In<-data.frame(data.frame(lapply(An_In,rep,times=51)))
+
+colnames(An_In)<-c("Ace_In","Carb_In","Cl_In","P_In","S_In","Ace_std","Carb_std","Cl_std","P_std","S_std")
+```
+
+Nov 2023 Edits cont.
+
+```{r}
+#Standards
+
+#Cations
+
+Cations_ctrl_mol_Avg <- Cations_ctrl_mol %>%
+  group_by(group = gl(n() / 3, 3)) %>%  # Create groups of every 3 rows
+  summarise_at(vars(Sodium, Ammonium, Potassium, Magnesium), list(mean = ~mean(., na.rm = TRUE), sd = ~sd(., na.rm = TRUE))) %>% 
+  select(-1)
+colnames(Cations_ctrl_mol_Avg)<-c("Na_ctrl","NH4_ctrl","K_ctrl","Mg_ctrl","Na_ctrl_std","NH4_ctrl_std","K_ctrl_std","Mg_ctrl_std")
+
+#creating the in columns, considering 2 reps of C, 3 of B, 3 of A (in this order), and how each is in triplicate
+
+Cations_Ctrl_All<-data.frame(lapply(Cations_ctrl_mol_Avg[1,],rep,times=51))
+
+#Anions
+Anions_Ctrl_Avg<-data.frame(Anions_ctrl_mol %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+        summarise_at(vars(Acetate,Chloride,Phosphate, Sulfate,Carbonate), list(mean = ~mean(., na.rm = TRUE), sd = ~sd(., na.rm = TRUE))))%>% 
+  select(-1)
+colnames(Anions_Ctrl_Avg)<-c("Ace_ctrl","Cl_ctrl","P_ctrl","S_ctrl","Carb_ctrl","Ace_ctrl_std","Cl_ctrl_std","P_ctrl_std","S_ctrl_std","Carb_ctrl_std")
+
+Anions_Ctrl_All<-data.frame(lapply(Anions_Ctrl_Avg[1,],rep,times=51))
+```
+
+## Calculating the Normalized Ion Concentrations and Dose
+
+edited Nov 2023 to update reference value for columns being divided
+
+```{r}
+df_All$Na_Norm<- df_All$Sodium/df_All$Na_In
+df_All$NH4_Norm<- df_All$Ammonium/df_All$NH4_In
+df_All$K_Norm<- df_All$Potassium/df_All$K_In
+df_All$Mg_Norm<- df_All$Magnesium/df_All$Mg_In
+
+df_All$Ace_Norm<- df_All$Acetate/df_All$Ace_In
+df_All$Cl_Norm<- df_All$Chloride/df_All$Cl_In
+df_All$P_Norm<- df_All$Phosphate/df_All$P_In
+df_All$S_Norm<- df_All$Sulfate/df_All$S_In
+df_All$Carb_Norm<- df_All$Carbonate/df_All$Carb_In
+```
+
+## Determining Dose
+
+```{r}
+df_All$Dose<-(mapply('/',df_All$mass_biochar,df_All$volume))
+```
+
+## Average and stdev of Replicates
+
+-   Calculating the average and stdev of the replicates an combining them into one dataframe
+
+-   calculating Q_sd as a percent of Q to determine where to cuz off the data
+
+```{r}
+
+#taking the average 
+
+df_All_Avg<-data.frame(
+ df_All %>%
+   select(-PHREEQC_number, -Rep) %>%
+    group_by(group = gl(n()/3, 3)) %>% #takes average of every 3 rows
+     summarise(across(everything(), mean, na.rm = TRUE)))
+
+#taking stdev
+df_All_sd<-data.frame(
+ df_All%>%
+    group_by(group = gl(n()/3, 3)) %>% #applies function to every 3 rows
+    summarise_at(c("Sodium","Ammonium","Potassium","Magnesium","Acetate","Chloride","Phosphate", "Sulfate", "Carbonate","pH","Ionic_str", "Act_NH4","Act_Na","Act_K","Na_Norm","NH4_Norm","K_Norm","Mg_Norm","Ace_Norm","Cl_Norm","P_Norm","S_Norm","Carb_Norm","Q_NH4","Q_Na","Q_K","Q_Mg","Q_Cl","Q_PO4","Q_S","Q_Ace"),sd))
+
+colnames(df_All_sd)<-as.character(c("group","Sodium_sd","Ammonium_sd","Potassium_sd","Magnesium_sd","Acetate_sd","Chloride_sd","Phosphate_sd", "Sulfate_sd", "Carbonate_sd","pH_sd", "Ionic_str_sd","Act_NH4_sd","Act_Na_sd","Act_K_sd","Na_Norm_sd","NH4_Norm_sd","K_Norm_sd","Mg_Norm_sd","K_Ace_Norm_sd","Cl_Norm_sd","P_Norm_sd","S_Norm_sd","Carb_Norm_sd","Q_NH4_sd","Q_Na_sd","Q_K_sd","Q_Mg_sd","Q_Cl_sd","Q_PO4_sd","Q_S_sd","Q_Ace_sd"))
+
+#combining average and std dataframes
+
+
+df_All_Avg_sd<-data.frame(cbind(df_All_Avg,df_All_sd[,-1]))
+
+#Calculating the %percent SD of Q
+
+df_All_Avg_sd$Q_NH4_sd_perc<-(mapply('/', df_All_Avg_sd$Q_NH4_sd,df_All_Avg_sd$Q_NH4))
+df_All_Avg_sd$Q_NH4_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_NH4_sd_perc,100)))  
+
+df_All_Avg_sd$Q_Na_sd_perc<-(mapply('/', df_All_Avg_sd$Q_Na_sd,df_All_Avg_sd$Q_Na))
+df_All_Avg_sd$Q_Na_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_Na_sd_perc,100))) 
+
+df_All_Avg_sd$Q_K_sd_perc<-(mapply('/', df_All_Avg_sd$Q_K_sd,df_All_Avg_sd$Q_K))
+df_All_Avg_sd$Q_K_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_K_sd_perc,100))) 
+
+df_All_Avg_sd$Q_Mg_sd_perc<-(mapply('/', df_All_Avg_sd$Q_Mg_sd,df_All_Avg_sd$Q_Mg))
+df_All_Avg_sd$Q_Mg_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_Mg_sd_perc,100))) 
+
+#October 2023; adding Q for Anions
+df_All_Avg_sd$Q_Cl_sd_perc<-(mapply('/', df_All_Avg_sd$Q_Cl_sd,df_All_Avg_sd$Q_Cl))
+df_All_Avg_sd$Q_Cl_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_Cl_sd_perc,100)))  
+
+df_All_Avg_sd$Q_PO4_sd_perc<-(mapply('/', df_All_Avg_sd$Q_PO4_sd,df_All_Avg_sd$Q_PO4))
+df_All_Avg_sd$Q_PO4_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_PO4_sd_perc,100))) 
+
+df_All_Avg_sd$Q_S_sd_perc<-(mapply('/', df_All_Avg_sd$Q_S_sd,df_All_Avg_sd$Q_S))
+df_All_Avg_sd$Q_S_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_S_sd_perc,100))) 
+
+df_All_Avg_sd$Q_Ace_sd_perc<-(mapply('/', df_All_Avg_sd$Q_Ace_sd,df_All_Avg_sd$Q_Ace))
+df_All_Avg_sd$Q_Ace_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_Ace_sd_perc,100))) 
+
+#------------------------------------------------------------------------------------------------------------
+```
+
+### Converting Ox condition to factors to be able to group for plotting
+
+```{r}
+df_All_Avg_sd$Ox<-as.factor(df_All_Avg$Ox) 
+```
+
+## Oct 2023 Edit
+
+Resaving file as RDS to work on in separate .rmd file
+
+Note - In is just in, not avg of in and ctrl - verifying
+
+```{r}
+saveRDS(df_All_Avg_sd, file = "int_ALL.RDS")
+
+```

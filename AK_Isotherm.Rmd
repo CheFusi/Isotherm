@@ -633,6 +633,7 @@ END
 NOTE: The output file will default to save in the same folder as the PHREEQC application\
 
 -   Copy the outputs, which will be ionic strength and log ALK into the ALK tab in the main excel sheet
+-   I don't know where the file saves but you define the file name in the .txt file so you can use spotlight to search. it's an .out file so it's easiest to open it using R - so you can also search it in R
 
 ## Activities
 
