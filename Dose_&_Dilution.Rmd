@@ -20,7 +20,7 @@ libs_2<-c("readxl","readr","tidyr","GGally","naniar","readr")
 
 
 # plotting
-libs_3<-c("ggplot2","viridis","ggpubr","cowplot")#,"ggthemr") 
+libs_3<-c("ggplot2","viridis","ggpubr","cowplot", "gridExtra")#,"ggthemr") 
 
 #ggpubr = package for publishing
 #cowplot=  #to create compounded figures
@@ -40,6 +40,578 @@ invisible(lapply(libs, require, character.only = TRUE, quietly = TRUE))
 
 Dilution_Isotherm_All <- readRDS("Dilution_Isotherms_All.RDS")
 Dose_Isotherm_All <- readRDS("Dose_Isotherms_All.RDS")
+ALL_Biochars <- readRDS("ALL_Biochars.RDS")
 
+
+```
+
+```{r}
+
+# Combine data from Dose_Isotherm_All and Dilution_Isotherm_All lists into a single dataframe
+combined_df_AK_30 <- rbind(Dilution_Isotherm_All[[1]],Dilution_Isotherm_All[[2]]) 
+
+
+```
+
+```{r}
+
+
+Q_AK30_NH4_Conc_Plot<- ggplot(Dilution_Isotherm_All[[1]],aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,450))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,2.3))
+Q_AK30_NH4_Conc_Plot
+```
+
+```{r}
+
+Q_AK05_NH4_Conc_Plot<- ggplot(Dilution_Isotherm_All[[3]],aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,550))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,1.2))
+Q_AK05_NH4_Conc_Plot
+```
+
+```{r}
+
+
+Q_AK05_NH4_Henry_Conc_Plot<- ggplot(Dilution_Isotherm_All[[3]],aes(x=Ammonium_moles_eq_avg,y=Q_NH4_Henry_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_Henry_avg-Q_NH4_Henry_sd, ymax=Q_NH4_Henry_avg+Q_NH4_Henry_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,550))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,1.2))
+Q_AK05_NH4_Henry_Conc_Plot
+```
+
+```{r}
+
+Q_AK_10_NH4_Conc_Plot<- ggplot(Dilution_Isotherm_All[[4]],aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,450))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,2.7))
+Q_AK_10_NH4_Conc_Plot
+```
+
+```{r}
+
+Q_AK10_NH4_Henry_Conc_Plot<- ggplot(Dilution_Isotherm_All[[4]],aes(x=Ammonium_moles_eq_avg,y=Q_NH4_Henry_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_Henry_avg-Q_NH4_Henry_sd, ymax=Q_NH4_Henry_avg+Q_NH4_Henry_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,450))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,2.7))
+Q_AK10_NH4_Henry_Conc_Plot
+```
+
+```{r}
+
+Q_AK_30_NH4_Conc_Plot_Add<- ggplot(combined_df_AK_30,aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,450))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,2.3))
+Q_AK_30_NH4_Conc_Plot_Add
+```
+
+```{r}
+
+# Combine data from Dose_Isotherm_All and Dilution_Isotherm_All lists into a single dataframe
+combined_df_AK30_All <- rbind(Dose_Isotherm_All[[1]], Dilution_Isotherm_All[[1]],Dilution_Isotherm_All[[2]]) #2 is the AK30 K-N
+
+combined_df_AK05 <- rbind(Dose_Isotherm_All[[3]], Dilution_Isotherm_All[[3]])
+combined_df_AK10 <- rbind(Dose_Isotherm_All[[4]], Dilution_Isotherm_All[[4]]) 
+combined_df_AK10 <- subset (combined_df_AK10, Q_NH4_avg <3.5)
+
+```
+
+```{r}
+
+
+Q_AK30_Conc_Plot_comb<- ggplot(combined_df_AK_30,aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )#+
+    #scale_x_continuous(expand = c(0.0,0), limits = c(0,300))+
+    #scale_y_continuous(expand = c(0,0), limits = c(0.0,2.3))
+Q_AK30_Conc_Plot_comb
+```
+
+```{r}
+
+Q_AK05_Conc_Plot_comb<- ggplot(combined_df_AK05,aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,630))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,2.5))
+Q_AK05_Conc_Plot_comb
+```
+
+```{r}
+
+
+Q_AK10_Conc_Plot_comb<- ggplot(combined_df_AK10,aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,620))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,2.7))
+Q_AK10_Conc_Plot_comb
+```
+
+```{r}
+
+
+Q_Conc_Plot<- ggplot(Dilution_Isotherm_All[[2]],aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )+
+    scale_x_continuous(expand = c(0.0,0), limits = c(0,300))+
+    scale_y_continuous(expand = c(0,0), limits = c(0.0,2.5))
+Q_Conc_Plot
+
+```
+
+```{r}
+
+Q_Na_Conc_Plot<- ggplot(Dilution_Isotherm_All[[1]],aes(x=Ammonium_moles_eq_avg,y=Q_Na_avg, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  geom_errorbar(aes(ymin=Q_Na_avg-Q_Na_sd, ymax=Q_Na_avg+Q_Na_sd))+
+  geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol Na/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )#+
+    #scale_x_continuous(expand = c(0.0,0), limits = c(0,450))+
+    #scale_y_continuous(expand = c(0,0), limits = c(0.0,2.3))
+Q_Na_Conc_Plot
+
+```
+
+### Combined plots
+
+```{r}
+# Overlay the plots with different shades of green and add manual legend
+combined_plot <- ggplot() +
+  # Plot 1 with light green
+  geom_point(data = combined_df_AK30_All, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg), 
+             shape = 21, size = 6, stroke = 2, color = "#2E632E", fill = "#2E632E") +
+  geom_errorbar(data = combined_df_AK30_All, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                              ymin = Q_NH4_Henry_avg - Q_NH4_Henry_sd, ymax = Q_NH4_Henry_avg + Q_NH4_Henry_sd),
+                color = "#2E632E") +
+  geom_errorbarh(data = combined_df_AK30_All, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, 
+                                               xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, 
+                                               xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd),
+                 color = "#2E632E") +
+  # Plot 2 with medium green
+  geom_point(data = combined_df_AK10, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg), 
+             shape = 21, size = 6, stroke = 2, color = "#5AA05A", fill = "#5AA05A") +
+  geom_errorbar(data = combined_df_AK10, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                                      ymin = Q_NH4_Henry_avg - Q_NH4_Henry_sd, 
+                                                      ymax = Q_NH4_Henry_avg + Q_NH4_Henry_sd),
+                color = "#5AA05A") +
+  geom_errorbarh(data = combined_df_AK10, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                                       xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, 
+                                                       xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd),
+                 color = "#5AA05A") +
+  # Plot 3 with dark green
+  geom_point(data = combined_df_AK05, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg), 
+             shape = 21, size = 6, stroke = 2, color = "#8ED88E", fill = "#8ED88E") +
+  geom_errorbar(data = combined_df_AK05, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                                      ymin = Q_NH4_Henry_avg - Q_NH4_Henry_sd, 
+                                                      ymax = Q_NH4_Henry_avg + Q_NH4_Henry_sd),
+                color = "#8ED88E") +
+  geom_errorbarh(data = combined_df_AK05, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                                       xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, 
+                                                       xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd),
+                 color = "#8ED88E") +
+  # Add manual legend
+  geom_text(data = NULL, aes(x = 100, y = 2.5, label = "0.30"), color = "#2E632E", size = 6) +
+  geom_text(data = NULL, aes(x = 250, y = 2.5, label = "0.23"), color = "#5AA05A", size = 6) +
+  geom_text(data = NULL, aes(x = 400, y = 2.5, label = "0.20"), color = "#8ED88E", size = 6) +
+  labs(x = "Equilibrium Concentration (mM)", y = "Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.9, 0.9),  # Adjust the legend position as needed
+    axis.text = element_text(size = 24),
+    axis.title = element_text(size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+  scale_x_continuous(expand = c(0.0, 0), limits = c(0, 650)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0.0, 10.3))
+
+# Show the combined plot
+print(combined_plot)
+
+```
+
+```{r}
+# Overlay the plots with different shades of green and add manual legend
+combined_plot <- ggplot() +
+  # Plot 1 with light green
+  geom_point(data = combined_df_AK_30, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg), 
+             shape = 21, size = 6, stroke = 2, color = "#2E632E", fill = "#2E632E") +
+  geom_errorbar(data = combined_df_AK_30, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                              ymin = Q_NH4_Henry_avg - Q_NH4_Henry_sd, ymax = Q_NH4_Henry_avg + Q_NH4_Henry_sd),
+                color = "#2E632E") +
+  geom_errorbarh(data = combined_df_AK_30, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                               xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, 
+                                               xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd),
+                 color = "#2E632E") +
+  # Plot 2 with medium green
+  geom_point(data = Dilution_Isotherm_All[[4]], aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg), 
+             shape = 21, size = 6, stroke = 2, color = "#5AA05A", fill = "#5AA05A") +
+  geom_errorbar(data = Dilution_Isotherm_All[[4]], aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                                      ymin = Q_NH4_Henry_avg - Q_NH4_Henry_sd, 
+                                                      ymax = Q_NH4_Henry_avg + Q_NH4_Henry_sd),
+                color = "#5AA05A") +
+  geom_errorbarh(data = Dilution_Isotherm_All[[4]], aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                                       xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, 
+                                                       xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd),
+                 color = "#5AA05A") +
+  # Plot 3 with dark green
+  geom_point(data = Dilution_Isotherm_All[[3]], aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg), 
+             shape = 21, size = 6, stroke = 2, color = "#8ED88E", fill = "#8ED88E") +
+  geom_errorbar(data = Dilution_Isotherm_All[[3]], aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                                      ymin = Q_NH4_Henry_avg - Q_NH4_Henry_sd, 
+                                                      ymax = Q_NH4_Henry_avg + Q_NH4_Henry_sd),
+                color = "#8ED88E") +
+  geom_errorbarh(data = Dilution_Isotherm_All[[3]], aes(x = Ammonium_moles_eq_avg, y = Q_NH4_Henry_avg, 
+                                                       xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, 
+                                                       xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd),
+                 color = "#8ED88E") +
+  # Add manual legend
+  geom_text(data = NULL, aes(x = 100, y = 2.5, label = "0.30"), color = "#2E632E", size = 6) +
+  geom_text(data = NULL, aes(x = 250, y = 2.5, label = "0.23"), color = "#5AA05A", size = 6) +
+  geom_text(data = NULL, aes(x = 400, y = 2.5, label = "0.20"), color = "#8ED88E", size = 6) +
+  labs(x = "Equilibrium Concentration (mM)", y = "Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(3, 1),  # Adjust the legend position as needed
+    axis.text = element_text(size = 24),
+    axis.title = element_text(size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+  scale_x_continuous(expand = c(0.0, 0), limits = c(0, 550)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(0.0, 3.2))
+
+# Show the combined plot
+print(combined_plot)
+
+```
+
+```{r}
+
+
+Diliution_All <- rbind(combined_df_AK_30, Dilution_Isotherm_All[[3]],Dilution_Isotherm_All[[4]])
+
+Diliution_All$OX <- as.factor(Diliution_All$OX)
+
+# Set NaN values to NA in the column "Ammonium_moles_eq_avg"
+Diliution_All$Ammonium_moles_eq_avg[is.nan(Diliution_All$Ammonium_moles_eq_avg)] <- NA
+
+ALL_Biochars_sub <- ALL_Biochars %>% filter(Type_ox %in% c("AK_05", "AK_10", "AK_30"))
+
+Diliution_All_sub <- Diliution_All %>% filter(Type_ox %in% c("AK_05", "AK_10", "AK_30", "AK_31"))
+
+# Extract common column names
+common_col_names <- intersect(names(Diliution_All_sub), names(ALL_Biochars_sub))
+
+ALL_Biochars_sub_2 <- (ALL_Biochars_sub[, common_col_names])
+
+Diliution_All_sub_2 <- (Diliution_All_sub[, common_col_names])
+
+# Perform right join based on common column names
+Dose_Diliution <- rbind(Diliution_All_sub[, common_col_names], ALL_Biochars_sub[, common_col_names])
+
+#colnames_df1 <- colnames(Diliution_All)
+#colnames_df2 <- colnames(Dose_Diliution)
+
+# Find the column names that are unique to each dataframe
+#unique_to_df1 <- setdiff(colnames_df1, colnames_df2)
+#unique_to_df2 <- setdiff(colnames_df2, colnames_df1)
+
+#unique_to_df1
+
+#unique_to_df2
+```
+
+```{r}
+
+Q_Comb_Conc_Plot<- ggplot(Dose_Diliution,aes(x=Ammonium_moles_eq_avg,y=Q_NH4_avg, color = OX,border= OX, fill=OX,  na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill="black") +
+  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_Na_sd, ymax=Q_Na_avg+Q_Na_sd))+
+  #geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )#+
+    #scale_x_continuous(expand = c(0.0,0), limits = c(0,450))+
+    #scale_y_continuous(expand = c(0,0), limits = c(0.0,2.3))
+Q_Comb_Conc_Plot
+```
+
+```{r}
+
+Q_Comb_Conc_Plot <- ggplot(Dose_Diliution, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OX, fill = OX)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+   xlab("Equilibrium Concentration (mM)") +
+   ylab("Q (mmol NH4/g biochar)") +
+   theme_classic(base_size = 28) +
+   theme(
+      text = element_text(family = "Times"),
+      legend.position = c(0.1, 0.8),
+      axis.text.x = element_text(size = 24),
+      axis.text.y = element_text(size = 24),
+      axis.title.x = element_text(margin = margin(t = 20), size = 24),
+      axis.title.y = element_text(margin = margin(r = 20), size = 24),
+      panel.border = element_rect(color = "black", fill = NA, size = 3),
+      legend.text = element_text(size = 20),
+      legend.title = element_text(size = 24),
+      legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+   ) +
+   scale_color_identity() +
+   scale_fill_identity()
+Q_Comb_Conc_Plot
+```
+
+```{r}
+
+# Manually specify colors and labels for Type_ox levels
+type_ox_colors <- c("AK_05" = "#8ED88E", "AK_10" = "#5AA05A", "AK_30" = "#2E632E", "AK_31" = "#2E632E")
+type_ox_labels <- c("AK_05" = "0.20", "AK_10" = "0.23", "AK_30" = "0.30", "AK_31" = "0.30")
+
+# Plot the data
+ggplot(combined_data, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = Type_ox, shape = Shape)) +
+  geom_point(size = 6, stroke = 2) +
+  scale_color_manual(values = type_ox_colors, labels = type_ox_labels) +
+  scale_shape_manual(values = c("Dose" = 1, "Dilution" = 19)) +
+  xlab("Equilibrium Concentration (mM)") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.3),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 10),
+    legend.title = element_text(size = 14),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
 
 ```
