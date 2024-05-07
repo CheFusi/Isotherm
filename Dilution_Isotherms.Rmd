@@ -59,7 +59,7 @@ Determining the dilution factors for each biochar based on the sorption density 
 # 
 capacities_2 <- capacities %>% select("Q_NH4_avg","Type_ox")
 
-Cin <- 8500
+Cin <- 10787
 C_min <- 2000
 
 #used for AK_30 trial C_in <- 5500
@@ -133,15 +133,18 @@ Ceq_dataframe<- round(Ceq_dataframe,0)
 #View(Ceq_dataframe %>% 
 #  select(contains("Cin")|contains("AK_30")))
 
-View(Ceq_dataframe %>% 
-  select(contains("Cin")|contains("AM_15")|contains("AK_05")|contains("AK_10")|contains("AK_30")))
+#View(Ceq_dataframe %>% 
+#  select(contains("Cin")|contains("AO_20")|contains("AK_30")))
+
+#View(Ceq_dataframe %>% 
+  #select(contains("Cin")|contains("AM_05")|contains("AM_10")|contains("AN_30")))
 ```
 
 Plotting to see how Ceq performs relative to predicted
 
 ```{r}
 
-Dilution_Isotherms_All <-readRDS("Dilution_Isotherms_All.RDS")
+#Dilution_Isotherms_All <-readRDS("Dilution_Isotherms_All.RDS")
 #plot(Ceq_dataframe$AK_30_Ceq,Dilution_Isotherms_All[[1]]$Ammonium_moles_eq_avg)
 # Add a 1:1 line
 #abline(a = 0, b = 1, col = "red")
@@ -891,6 +894,44 @@ Dilution_Isotherm_All <- readRDS("Dilution_Isotherms_All.RDS")
 ```
 
 ### Plotting
+
+```{r}
+
+generate_plot <- function(df, name) {
+  ggplot(df, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, na.rm = TRUE)) +
+    geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill = "black") +
+    geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
+    geom_errorbarh(aes(xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd)) +
+    xlab("Equilibrium Concentration (mM)") +
+    ylab("Q (mmol NH4/g biochar)") +
+    ggtitle(name) +  # Set plot title to the dataframe name
+    theme_classic(base_size = 28) +
+    theme(
+      text = element_text(family = "Times"),
+      legend.position = c(0.1, 0.8),
+      axis.text.x = element_text(size = 24),
+      axis.text.y = element_text(size = 24),
+      axis.title.x = element_text(margin = margin(t = 20), size = 24),
+      axis.title.y = element_text(margin = margin(r = 20), size = 24),
+      panel.border = element_rect(color = "black", fill = NA, size = 3),
+      legend.text = element_text(size = 20),
+      legend.title = element_text(size = 24),
+      legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+    ) 
+}
+
+# Apply the function to each dataframe in the list and store the plots
+list_of_plots <- mapply(generate_plot, Dilution_Isotherm_All, names(Dilution_Isotherm_All), SIMPLIFY = FALSE)
+
+# View the plots
+list_of_plots
+
+# If you want to print each plot separately
+# for (plot in list_of_plots) {
+#   print(plot)
+# }
+
+```
 
 ```{r}
 

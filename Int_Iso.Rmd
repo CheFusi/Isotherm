@@ -457,8 +457,6 @@ df_All$Dose<-(mapply('/',df_All$mass_biochar,df_All$volume))
 
 ## Calculating Q of each Triplicate
 
-Note: the Q is based on the C_in which is the average of the initial value and the control
-
 ```{r}
 
 
@@ -499,6 +497,22 @@ df_All$Q_Ace<-Q_function(df_All,"Q_Ace","Ace_In","Acetate","volume","mass_biocha
 -   calculating Q_sd as a percent of Q to determine where to cuz off the data
 
 ```{r}
+
+
+# Rename the "Ox" column to "Type_ox"
+df_All <- df_All %>%
+  rename(Type_ox = Ox)
+
+# Create a new column "Ox" containing the numeric part of "Type_ox"
+df_All <- df_All %>%
+  mutate(Ox = as.numeric(sub("^\\D+", "", Type_ox)))
+
+# View the modified dataframe
+head(df_All)
+```
+
+```{r}
+
 
 #taking the average 
 
@@ -551,7 +565,7 @@ df_All_Avg_sd$Q_Ace_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_Ace_sd_perc,100)))
 #------------------------------------------------------------------------------------------------------------
 ```
 
-### Converting Ox condition to factors to be able to group for plotting
+###  Converting Ox condition to factors to be able to group for plotting
 
 ```{r}
 df_All_Avg_sd$Ox<-as.factor(df_All_Avg$Ox) 

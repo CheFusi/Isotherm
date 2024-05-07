@@ -83,8 +83,8 @@ new_column_names<-c("group","OX","ID",
                     "pH_sd", "Ionic_str_sd","NH4_Act_sd", "Na_Act_sd", "K_Act_sd",
                     "Na_Norm_sd", "NH4_Norm_sd", "K_Norm_sd","Mg_Norm_sd",
                     "Ace_Norm_sd", "Cl_Norm_sd", "PO4_Norm_sd", "SO4_Norm_sd","Carb_Norm_sd",
-                    "Q_NH4_avg_sd", "Q_Na_avg_sd","Q_K_avg_sd","Q_Mg_avg_sd", "Q_Cl_avg_sd", "Q_PO4_avg_sd", "Q_SO4_avg_sd",
-                    "Q_Ace_avg_sd","Q_NH4_avg_sd_perc","Q_Na_avg_sd_perc","Q_K_avg_sd_perc", "Q_Mg_sd_perc",
+                    "Q_NH4_sd", "Q_Na_sd","Q_K_sd","Q_Mg_sd", "Q_Cl_sd", "Q_PO4_sd", "Q_SO4_sd",
+                    "Q_Ace_sd","Q_NH4_avg_sd_perc","Q_Na_avg_sd_perc","Q_K_avg_sd_perc", "Q_Mg_sd_perc",
                     "Q_Cl_sd_perc","Q_PO4_sd_perc","Q_S_sd_perc","Q_Ace_sd_perc")  
                     
                     #,"OC","Type")
@@ -172,14 +172,14 @@ colnames(int_ALL)[colnames(int_ALL) %in% old_column_names] <- new_column_names
            Q_Cl_avg = Q_Cl,
            Q_PO4_avg = Q_PO4,
            Q_Ace_avg = Q_Ace,
-           Q_NH4_avg_sd = Q_NH4_sd,
-           Q_Na_avg_sd = Q_Na_sd,
-           Q_K_avg_sd = Q_K_sd,
-           Q_Mg_avg_sd = Q_Mg_sd,
-           Q_Cl_avg_sd = Q_Cl_sd,
-           Q_PO4_avg_sd = Q_PO4_sd,
-           Q_Ace_avg_sd = Q_Ace_sd,
-           Q_SO4_avg_sd = Q_SO4_sd,
+           #Q_NH4_avg_sd = Q_NH4_sd,
+           #Q_Na_avg_sd = Q_Na_sd,
+           #Q_K_avg_sd = Q_K_sd,
+           #Q_Mg_avg_sd = Q_Mg_sd,
+           #Q_Cl_avg_sd = Q_Cl_sd,
+           #Q_PO4_avg_sd = Q_PO4_sd,
+           #Q_Ace_avg_sd = Q_Ace_sd,
+           #Q_SO4_avg_sd = Q_SO4_sd,
            Q_NH4_avg_sd_perc = Q_NH4_sd_perc,
            Q_Na_avg_sd_perc = Q_Na_sd_perc,
            Q_K_avg_sd_perc = Q_K_sd_perc
@@ -352,7 +352,7 @@ unique_to_df1
 unique_to_df2
 ```
 
-##  Corrected for losses to headspace using control
+## Corrected for losses to headspace using control
 
 ```{r}
 
@@ -498,7 +498,7 @@ Q_Conc_Plot_2
 
 Q_Act_Plot_3<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
    geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Equilibrium Activity (mM)")+
@@ -708,7 +708,7 @@ Q_Conc_Plot
 
 ```{r}
 ALL_Biochars_subset<-ALL_Biochars%>%
-  filter(Q_NH4_avg+Q_NH4_avg_sd<6)
+  filter(Q_NH4_avg+Q_NH4_sd<6)
          
          #,Q_NH4_avg-Q_NH4_avg_sd>=-0.5)
 
@@ -716,7 +716,7 @@ ALL_Biochars_subset<-ALL_Biochars%>%
 
 Q_Conc_Plot_subset <- ggplot(ALL_Biochars_subset, aes(x = NH4_Act, y = Q_NH4_avg, color = OC, fill = OC, na.rm = TRUE)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +  # shape = 21 provides a circle with a border
-  geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_avg_sd, ymax = Q_NH4_avg + Q_NH4_avg_sd)) +
+  geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
   geom_errorbarh(aes(xmin = NH4_Act - NH4_Act_sd, xmax = NH4_Act + NH4_Act_sd)) +
   xlab("Equilibrium Activity (mM)") +
   ylab("Q (mmol NH4/g biochar)") +
@@ -759,7 +759,7 @@ Q_Conc_Plot_subset
 ```{r}
 Q_Conc_Plot_3b<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Q_NH4_avg, color = XPS_OC, na.rm=TRUE)) +
   geom_point(shape=16, size =4)+
-  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+ 
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Equilibrium Activity (mM)")+
@@ -791,7 +791,7 @@ Q_Act_Plot_4
 
 Q_Conc_Plot_5<- ggplot(ALL_Biochars,aes(x=Dose,y=Q_NH4_avg, color = OC, na.rm=TRUE)) +
   geom_point(shape=16, size =4)+
-  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+  geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Dose (g biochar/L Urine)")+
   ylab("Q (mmol NH4/g biochar")+
@@ -827,7 +827,7 @@ ALL_Biochars$OC<-as.numeric(as.character(ALL_Biochars$OC))
 ```{r}
 Q_Conc_Plot_7<- ggplot(ALL_Biochars,aes(x=Dose,y=Q_NH4_avg, color = OC, na.rm=TRUE)) +
   geom_point(shape=16, size =4)+
-    # geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+    # geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
  # geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Dose (g biochar/L Urine)")+
@@ -850,7 +850,7 @@ Q_Conc_Plot_7
 ```{r}
 Q_Conc_Plot_7b<- ggplot(ALL_Biochars,aes(x=Dose,y=Q_NH4_avg, color = XPS_OC, na.rm=TRUE)) +
   geom_point(shape=16, size =4)+
-    # geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+    # geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
  # geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Dose (g biochar/L Urine)")+
@@ -875,7 +875,7 @@ ALL_Biochars$Dose<-as.numeric(ALL_Biochars$Dose)
 
 Q_Conc_Plot_9<- ggplot(ALL_Biochars,aes(x=OC,y=Q_NH4_avg,color=Ammonium_moles_eq_sd, na.rm=TRUE)) +
   geom_point(shape=16, size =4)+
-    # geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+    # geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
  # geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   facet_wrap(facets = vars(Dose))+
@@ -903,7 +903,7 @@ ALL_Biochars$Dose<-as.factor(ALL_Biochars$Dose)
 Q_Conc_Plot_8<- ggplot(ALL_Biochars,aes(x=Dose,y=Q_NH4_avg, color = OC, na.rm=TRUE)) +
   geom_boxplot()+
   geom_point()+
-    # geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+    # geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
  # geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Dose (g biochar/L Urine)")+
@@ -1136,18 +1136,18 @@ Norm_<-
 
 Norm_sd<-
   ALL_Biochars%>%
-  select(c("OC","Q_NH4_avg_sd", "Q_Na_avg_sd", "Q_K_avg_sd","Q_Cl_avg_sd", "Q_PO4_avg_sd", "Q_SO4_avg_sd", "Q_Ace_avg_sd","Dose"))
+  select(c("OC","Q_NH4_sd", "Q_Na_sd", "Q_K_sd","Q_Cl_sd", "Q_PO4_sd", "Q_SO4_sd", "Q_Ace_sd","Dose"))
 
 #Attempting to Represent Uncertainty with Transleucency 
 
-Norm_sd$normalized_NH4_sd <-1-( Norm_sd$Q_NH4_avg_sd / max(Norm_sd$Q_NH4_avg_sd))
-Norm_sd$normalized_Na_sd <- 1-( Norm_sd$Q_Na_avg_sd / max(Norm_sd$Q_Na_avg_sd))
-Norm_sd$normalized_K_sd <- 1-(Norm_sd$Q_K_avg_sd / max(Norm_sd$Q_K_avg_sd))
+Norm_sd$normalized_NH4_sd <-1-( Norm_sd$Q_NH4_sd / max(Norm_sd$Q_NH4_sd))
+Norm_sd$normalized_Na_sd <- 1-( Norm_sd$Q_Na_sd / max(Norm_sd$Q_Na_sd))
+Norm_sd$normalized_K_sd <- 1-(Norm_sd$Q_K_sd / max(Norm_sd$Q_K_sd))
 
-Norm_sd$normalized_Cl_sd <-1-( Norm_sd$Q_Cl_avg_sd / max(Norm_sd$Q_Cl_avg_sd))
-Norm_sd$normalized_PO4_sd <- 1-( Norm_sd$Q_PO4_avg_sd / max(Norm_sd$Q_PO4_avg_sd))
-Norm_sd$normalized_SO4_sd <- 1-(Norm_sd$Q_SO4_avg_sd / max(Norm_sd$Q_SO4_avg_sd))
-Norm_sd$normalized_Ace_sd <- 1-(Norm_sd$Q_Ace_avg_sd / max(Norm_sd$Q_Ace_avg_sd))
+Norm_sd$normalized_Cl_sd <-1-( Norm_sd$Q_Cl_sd / max(Norm_sd$Q_Cl_sd))
+Norm_sd$normalized_PO4_sd <- 1-( Norm_sd$Q_PO4_sd / max(Norm_sd$Q_PO4_sd))
+Norm_sd$normalized_SO4_sd <- 1-(Norm_sd$Q_SO4_sd / max(Norm_sd$Q_SO4_sd))
+Norm_sd$normalized_Ace_sd <- 1-(Norm_sd$Q_Ace_sd / max(Norm_sd$Q_Ace_sd))
 
 
 Norm_long <-
@@ -1422,7 +1422,7 @@ Q_no_NH4_high_plot
 
 Q_Conc_Plot_Q_Corr<- ggplot(ALL_Biochars, aes(x = NH4_Act, y = Q_Corr, color = OC, fill = OC, na.rm = TRUE)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +  # shape = 21 provides a circle with a border
-  #geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_avg_sd, ymax = Q_NH4_avg + Q_NH4_avg_sd)) +
+  #geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
   #geom_errorbarh(aes(xmin = NH4_Act - NH4_Act_sd, xmax = NH4_Act + NH4_Act_sd)) +
   xlab("Equilibrium Activity (mmol/L)") +
   ylab("Q (mmol NH4/g biochar)") +
@@ -1450,7 +1450,7 @@ Q_Conc_Plot_Q_Corr
 
 Q_Act_No_Err_Plot<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
    geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   #geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Equilibrium Activity (mmol)")+
@@ -1495,7 +1495,7 @@ w_wo_corr <- grid.arrange(Q_Act_No_Err_Plot_same_axis, Q_Conc_Plot_Q_Corr_same_a
 
 Ionic_Strength_plot<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=Ionic_str, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
    geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   #geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Equilibrium Activity (mmol)")+
@@ -1524,7 +1524,7 @@ Ionic_Strength_plot
 
 pH_plot<- ggplot(ALL_Biochars,aes(x=NH4_Act,y=pH, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
    geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   #geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Equilibrium Activity (mmol)")+
@@ -1557,7 +1557,7 @@ pH_plot +
 
 pH_Dose_plot<- ggplot(ALL_Biochars,aes(x=Dose,y=pH, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
    geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   #geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Dose")+
@@ -1592,7 +1592,7 @@ pH_Dose_plot
 
 Q_Act_No_Err_Plot<- ggplot(ALL_Biochars,aes(x=OC,y=Q_NH4_avg, color = Type_ox,border= Type_ox, fill=Type_ox, na.rm=TRUE)) +
    geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_avg_sd, ymax=Q_NH4_avg+Q_NH4_avg_sd))+
+  #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   #geom_errorbarh(aes(xmin=NH4_Act-NH4_Act_sd, xmax=NH4_Act+NH4_Act_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("OC")+
