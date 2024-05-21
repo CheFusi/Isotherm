@@ -565,7 +565,7 @@ df_All_Avg_sd$Q_Ace_sd_perc<-(abs(mapply('*',df_All_Avg_sd$Q_Ace_sd_perc,100)))
 #------------------------------------------------------------------------------------------------------------
 ```
 
-###  Converting Ox condition to factors to be able to group for plotting
+### Converting Ox condition to factors to be able to group for plotting
 
 ```{r}
 df_All_Avg_sd$Ox<-as.factor(df_All_Avg$Ox) 
