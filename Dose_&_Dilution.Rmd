@@ -76,6 +76,11 @@ Dilution_All$SSA <- merged_df$SSA[Dilution_All$match_idx]
 Dilution_All$Type <- merged_df$Type[Dilution_All$match_idx]
 Dilution_All$XPS_OC <- merged_df$XPS_OC[Dilution_All$match_idx]
 
+#Adding in Surface Area normalized Q 
+
+Dilution_All <- Dilution_All %>%
+  mutate(Q_NH4_avg_SSA = Q_NH4_avg / SSA)
+
 #check
 Dilution_View <- merged_df %>%
   select(Type_ox, OC, XPS_OC)# Q_NH4_avg, Qmax)
@@ -135,7 +140,7 @@ Dose_Dilution <- rbind(transform(ALL_Biochars_sub_2, Shape = "Dose"),
 #   mutate(OC = type_ox_mapping[Type_ox],
 #          OC_XPS = type_ox_xps_mapping[Type_ox] )
 
-Dose_Dilution <- Dose_Dilution %>% filter(Q_NH4_avg >0 & Q_NH4_avg<5)  
+Dose_Dilution <- Dose_Dilution %>% filter(Q_NH4_avg >0)# & Q_NH4_avg<5)  
 Dose_Dilution$OC <- as.numeric(Dose_Dilution$OC)
 ```
 
@@ -162,17 +167,78 @@ ALL_Biochars$net_app_H_diff_avg_abs <- merged_df_All$net_app_H_diff_avg_abs[ALL_
 
 ```
 
-Dilution Only
+### Separating Dilution and Dose Data
 
 ```{r}
 
 Dilution_Data <- Dose_Dilution %>% filter(Shape == "Dilution")
-Dose_Data <- Dose_Dilution %>% filter(Shape == "Dose")
 
+#Removing additional points from AK5, AK10, AM15 and AK30 so all Dilution biochars have 10 isotherm points 
+
+Dilution_Data <- Dilution_Data %>% filter(!(Type_ox %in% c("AK_05", "AK_10", "AM_15") & ID %in% c(2, 4, 6)) &
+                                          !(Type_ox == "AK_30" & ID %in% c(2, 4, 6, 8, 10)))
+
+
+Dose_Data <- Dose_Dilution %>% filter(Shape == "Dose")
+```
+
+### Filtering Data
+
+-   Only retaining biochars with percent standard deviation \< 25% and Q-Qsd is greater than 0
+
+-   ALL_Biochars_Qsd_25: samples where stdev is less than 25%
+
+-   ALL_Biochars_High_C_diff: samples where stdev is less than 25% and the difference between initial and equilibrium concentrations are greater than 90 mg/L
+
+```{r}
+
+ALL_Biochars <- ALL_Biochars %>%
+  filter (Q_NH4_avg >= 0 & Q_NH4_avg-Q_NH4_sd >= 0) 
+
+Dose_Dilution <- Dose_Dilution %>% 
+  filter (Q_NH4_avg >= 0 & Q_NH4_avg-Q_NH4_sd >= 0)
+
+ALL_Biochars_Qsd_25 <- ALL_Biochars %>%
+  filter (Q_NH4_avg_sd_perc <=25) #%>%
+  #filter(Q_NH4_avg <= 3)
+
+ALL_Biochars_High_C_diff <- ALL_Biochars %>%
+  mutate(C_diff = Ammonium_moles_in_avg - Ammonium_moles_eq_avg ) %>%
+  filter(C_diff >= 90)
+
+ALL_Biochars_Qsd_25_High_C_diff <- ALL_Biochars_Qsd_25 %>%
+  mutate(C_diff = Ammonium_moles_in_avg - Ammonium_moles_eq_avg ) %>%
+  filter(C_diff >= 90)
+
+ALL_Biochars_Qsd_25_Q_3 <- ALL_Biochars %>%
+  filter (Q_NH4_avg_sd_perc <=25) %>%
+  filter(Q_NH4_avg <= 2.5)
+
+Dose_Dilution_Qsd_25_Q_3 <- Dose_Dilution %>%
+  filter (Q_NH4_sd/Q_NH4_avg <=0.25) %>%
+  filter(Q_NH4_avg <= 2.5)
+```
+
+### View AO and AL
+
+```{r}
+
+AO_AL_df <- ALL_Biochars_Qsd_25_High_C_diff %>%
+  filter(Type %in% c("AL", "AO")) %>%
+  select(C_diff, Type_ox)
+
+ALL_Biochars_No_AL <- ALL_Biochars %>%
+  filter (!Type %in% c("AL")) 
+
+ALL_Biochars_Qsd_25_Q_3_No_AL <- ALL_Biochars_Qsd_25_Q_3 %>%
+  filter (!Type %in% c("AL"))
 
 ```
 
+### \*\* Dilution Only Plot
+
 ```{r}
+
 Q_Conc_Plot<- ggplot(Dilution_Data,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
    geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
     geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
@@ -200,10 +266,40 @@ Q_Conc_Plot<- ggplot(Dilution_Data,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg,
 Q_Conc_Plot
 ```
 
-### Dose Only Plot
+### Surface Area Normalized Dilution Plot
 
 ```{r}
 
+Q_Conc_Plot<- ggplot(Dilution_Data,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg_SSA, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+    #geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+   #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/m2 biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.83),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") 
+Q_Conc_Plot
+```
+
+### Dose Only Plot
+
+```{r}
 
 Q_Conc_Dose_Plot<- ggplot(ALL_Biochars,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
    geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
@@ -265,10 +361,110 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_
 Q_Conc_Dose_Plot
 ```
 
-### 
+### Dose only no AL
 
 ```{r}
 
+Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_No_AL,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+    geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+   geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") #+
+  #scale_x_continuous(expand = c(0,0), limits = c(-15,650))+
+  #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
+Q_Conc_Dose_Plot
+
+
+```
+
+### Dose Only No AL SSA Normialized
+
+```{r}
+
+Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_No_AL,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg_SSA, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+    #geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+   #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") #+
+  #scale_x_continuous(expand = c(0,0), limits = c(-15,650))+
+  #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
+Q_Conc_Dose_Plot
+
+```
+
+### \*\* Dose Only Q \< 3, Qsd \< 25%
+
+```{r}
+
+Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_Qsd_25_Q_3_No_AL,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 24, size = 6, stroke = 2, color = "black") +
+    geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+   geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") #+
+  #scale_x_continuous(expand = c(0,0), limits = c(-15,650))+
+  #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
+Q_Conc_Dose_Plot
+```
+
+```{r}
+ 
 Dose_low_Q <- ALL_Biochars %>% filter (OC < 0.18)
 
 Q_Conc_Dose_Plot<- ggplot(Dose_low_Q,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
@@ -342,7 +538,7 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_
    geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
    #facet_wrap(~ Type_ox, scales = "free")+ ###to separate into individual plots
   xlab("Equilibrium Concentration (mM)")+
-  ylab("Q (mmol NH4/g biochar)")+
+  ylab("Q (mmol NH4/m2 biochar)")+
   #ggtitle()+
   theme_classic(base_size = 28) +
   theme(
@@ -470,37 +666,38 @@ Q_Conc_Plot <- ggplot(Dose_Dilution, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_av
 Q_Conc_Plot
 ```
 
+### \*\* Combined Dose-Dilution Plot
+
 ```{r, warning= False}
 
-Q_Conc_Plot <- ggplot(Dose_Dilution, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC, border = "black", shape = Shape, fill = OC, na.rm = TRUE)) +
-  geom_point(size = 6, stroke = 1) +
+Q_Conc_Plot <- ggplot(Dose_Dilution_Qsd_25_Q_3, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC, shape = Shape, fill = OC)) +
+  geom_point(size = 6, stroke = 2, color = "black") +  # Outline shapes with a black line
   geom_errorbarh(aes(xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd)) +
   geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
-  scale_shape_manual(values = c("Dose" = 15, "Dilution" = 16)) +  # Assign different shapes based on the "Shape" variable
+  scale_shape_manual(values = c("Dose" = 24, "Dilution" = 21)) +  # Use shapes that support the fill and stroke aesthetics
   xlab("Equilibrium Concentration (mM)") +
   ylab("Q (mmol NH4/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
     text = element_text(family = "Times"),
-    legend.position = c(0.1, 0.7),
+    legend.position = c(0.3, 0.9),  # Move legend 
+    legend.direction = "horizontal",  # Set legend direction to horizontal
+    legend.box = "horizontal",
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
     axis.title.x = element_text(margin = margin(t = 20), size = 24),
     axis.title.y = element_text(margin = margin(r = 20), size = 24),
     panel.border = element_rect(color = "black", fill = NA, size = 3),
-    legend.text = element_text(size = 15),
-    legend.title = element_text(size = 18),
-    legend.key.size = unit(0.7, "lines"),  # Adjust the size of the legend key
-    legend.box.background = element_rect(color = "black", size = 0.9, linetype = "solid")
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 15),
+    legend.key.size = unit(1.2, "lines"),  # Adjust the size of the legend key
+    legend.box.background = element_rect(color = "black", size = 0.5, linetype = "solid")
   ) +
   scale_fill_gradient(low = "purple", high = "yellow") +
   scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend()) +
-  guides(color = "none") #+
-  #scale_x_continuous(expand = c(0, 0), limits = c(-15, 650)) +
-  #scale_y_continuous(expand = c(0, 0), limits = c(-0.2, 4))
+  guides(color = "none") 
 
 Q_Conc_Plot
-
 ```
 
 ```{r, warning=FALSE}
@@ -540,11 +737,111 @@ Q_Conc_Plot
 
 ```
 
+### Dose only Plot - AO and AL
+
+```{r}
+
+ALL_Biochars_Only_AL_AO <- ALL_Biochars%>% filter((Type %in% c("AO", "AL")))
+
+Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_Only_AL_AO,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+    geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+   geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") #+
+  #scale_x_continuous(expand = c(0,0), limits = c(-15,650))+
+  #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
+Q_Conc_Dose_Plot
+```
+
+```{r}
+
+Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_Only_AL_AO,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+    geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
+   geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Concentration (mM)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "purple", high = "yellow")+
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+  guides(color = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-15,600))+
+  scale_y_continuous(expand = c(0,0), limits = c(-0.2,3))
+Q_Conc_Dose_Plot
+```
+
 ## Dilution Isotherms
 
 ### Langmuir Isotherm Manual
 
 ```{r}
+
+# # Define the Langmuir function
+# Langmuir <- function(C, Qmax, K) {
+#   Qmax * K * C / (1 + (K * C))
+# }
+# 
+# # Function to fit Langmuir isotherm and extract Qmax
+# fit_langmuir <- function(df) {
+#   # Fit Langmuir isotherm
+#   fit <- nls(Q_NH4_avg ~ Langmuir(Ammonium_moles_eq_avg, Qmax, K),
+#              data = df,
+#              start = list(Qmax = max(df$Q_NH4_avg), K = 0.005),  # Initial parameter guesses
+#              na.action = na.exclude,# Exclude rows with missing values
+#              control = nls.control(maxiter = 1000)) #increase max number of iterations  
+#   
+#   # Extract Qmax value from the fit
+#   Qmax <- coef(fit)["Qmax"]
+#   
+#   # Create a new column with Qmax value repeated for each row
+#   df$Qmax <- Qmax
+#   
+#   return(df)
+# }
+# 
+# Dilution_Data <- Dilution_Data %>%
+#   group_by(Type_ox) %>%
+#   #filter(Type_ox %in% c("AN_30")) %>%
+#   mutate(Qmax = fit_langmuir(cur_data())$Qmax)  # Extract Qmax value directly
+# 
+# Dilution_Data$Qmax <- as.numeric(Dilution_Data$Qmax)
+# #Dilution_Data$OC_XPS <- as.numeric(Dilution_Data$OC_XPS)
+# 
+# #langmuir_fit <- langmuiranalysis(Dilution_Isotherm_All$AN_30$Ammonium_moles_eq_avg, Dilution_Isotherm_All$AN_30$Q_NH4_avg)
+# #langmuir_fit
 
 # Define the Langmuir function
 Langmuir <- function(C, Qmax, K) {
@@ -553,47 +850,41 @@ Langmuir <- function(C, Qmax, K) {
 
 # Function to fit Langmuir isotherm and extract Qmax
 fit_langmuir <- function(df) {
-  # Fit Langmuir isotherm
-  fit <- nls(Q_NH4_avg ~ Langmuir(Ammonium_moles_eq_avg, Qmax, K),
-             data = df,
-             start = list(Qmax = max(df$Q_NH4_avg), K = 0.005),  # Initial parameter guesses
-             na.action = na.exclude,# Exclude rows with missing values
-             control = nls.control(maxiter = 1000)) #increase max number of iterations  
+  # Try a range of initial guesses to avoid singular gradient issues
+  start1 <- expand.grid(Qmax = seq(0, 100, length.out = 10), K = seq(0.001, 100, length.out = 10))
   
-  # Extract Qmax value from the fit
-  Qmax <- coef(fit)["Qmax"]
   
-  # Create a new column with Qmax value repeated for each row
-  df$Qmax <- Qmax
+  tryCatch({
+    # Fit Langmuir isotherm
+    fit <- nls2::nls2(Q_NH4_avg ~ Langmuir(Ammonium_moles_eq_avg, Qmax, K),
+                      data = df,
+                      start = start1,  # Multiple starting points
+                      na.action = na.exclude, # Exclude rows with missing values
+                      control = nls.control(maxiter = 50, minFactor = 1e-8),
+                      algorithm = "port") # Increase max iterations and decrease minFactor
+    
+    # Extract Qmax value from the fit
+    Qmax <- coef(fit)["Qmax"]
+    
+    # Create a new column with Qmax value repeated for each row
+    df$Qmax <- Qmax
+  }, error = function(e) {
+    # Handle errors by assigning NA to Qmax and returning the dataframe
+    df$Qmax <- NA
+    message("Error fitting Langmuir model for Type_ox =", unique(df$Type_ox), ": ", e$message)
+  })
   
   return(df)
 }
 
 Dilution_Data <- Dilution_Data %>%
   group_by(Type_ox) %>%
-  #filter(Type_ox %in% c("AN_30")) %>%
-  mutate(Qmax = fit_langmuir(cur_data())$Qmax)  # Extract Qmax value directly
+  do(fit_langmuir(.)) %>%
+  ungroup() # Ungroup after processing
 
 Dilution_Data$Qmax <- as.numeric(Dilution_Data$Qmax)
-#Dilution_Data$OC_XPS <- as.numeric(Dilution_Data$OC_XPS)
-
-#langmuir_fit <- langmuiranalysis(Dilution_Isotherm_All$AN_30$Ammonium_moles_eq_avg, Dilution_Isotherm_All$AN_30$Q_NH4_avg)
-#langmuir_fit
 
 
-Dilution_View <- Dilution_Data %>%
-  select(Type_ox, OC, XPS_OC)# Q_NH4_avg, Qmax)
-#-----------------------------------------------------------------------------------
-
-#Dose_Data <- Dose_Data %>%
- # group_by(Type_ox) %>%
-  #filter(Type_ox %in% c("AN_30")) %>%
-  #mutate(Qmax = fit_langmuir(cur_data())$Qmax)  # Extract Qmax value directly
-
-#ALL_Biochars$Qmax <- as.numeric(ALL_Biochars$Qmax)
-
-#Dose_View <- ALL_Biochars %>%
- # select(Type_ox, OC, XPS_OC)# Q_NH4_avg, Qmax)
 ```
 
 ### Langmuir with R PUPAIM Package
@@ -640,46 +931,81 @@ Dilution_Data <- Dilution_Data %>%
 
 ```
 
-### Dilution Qmax Plot - Manual Langmuir
+### Dilution Data - w/o Replciate OC and Qmax for s
 
-```{r, warning=FALSE}
+```{r}
 
-Qmax_Plot <- ggplot(Dilution_Data, aes(x = OC, y = Qmax, color = Type, fill = Type)) +
-  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
-  xlab("OC Bulk") +
-  ylab("Q max (mmol NH4/g biochar)") +
-  theme_classic(base_size = 28) +
-  theme(
-    text = element_text(family = "Times"),
-    legend.position = c(0.1, 0.8),
-    axis.text.x = element_text(size = 24),
-    axis.text.y = element_text(size = 24),
-    axis.title.x = element_text(margin = margin(t = 20), size = 24),
-    axis.title.y = element_text(margin = margin(r = 20), size = 24),
-    panel.border = element_rect(color = "black", fill = NA, size = 3),
-    legend.text = element_text(size = 20),
-    legend.title = element_text(size = 24),
-    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
-  )  
-
-# Calculate R-squared value from the linear regression model
-lm_model <- lm(Qmax ~ OC, data = Dilution_Data)
-r_squared <- summary(lm_model)$r.squared
-
-# Add R-squared value to the plot
-Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(Dilution_Data$OC), y = max(Dilution_Data$Qmax), label = paste("R^2 =", round(r_squared, 2))),
-            hjust = 1, vjust = 5, color = "black", size = 6)
-
-Qmax_Plot
+# Filter the data to include only unique rows based on Type_ox
+unique_Dilution_data <- Dilution_Data %>% distinct(Type_ox, .keep_all = TRUE)
 ```
 
-### Dilution Qmax Plot - R Langmuir
+### \*\* Dilution Qmax Plot - Manual Langmuir
 
 ```{r, warning=FALSE}
 
-Qmax_Plot <- ggplot(Dilution_Data, aes(x = OC, y = Qmax_R, color = Type, fill = Type)) +
+# Create the plot with unique data
+Qmax_Plot <- ggplot(unique_Dilution_data, aes(x = OC, y = Qmax, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("OC Bulk") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Qmax ~ OC, data = unique_Dilution_data)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(OC), y = max(Qmax), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+```
+
+### Dilution Qmax Plot Bulk OC - R Langmuir
+
+```{r, warning=FALSE}
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(unique_Dilution_data, aes(x = OC, y = Qmax_R, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -696,98 +1022,235 @@ Qmax_Plot <- ggplot(Dilution_Data, aes(x = OC, y = Qmax_R, color = Type, fill = 
     legend.text = element_text(size = 20),
     legend.title = element_text(size = 24),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
-  )  
+  )
 
-# Calculate R-squared value from the linear regression model
-lm_model <- lm(Qmax_R ~ OC, data = Dilution_Data)
-r_squared <- summary(lm_model)$r.squared
+# Fit the linear regression model to the unique data
+lm_model <- lm(Qmax_R ~ OC, data = unique_Dilution_data)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(Dilution_Data$OC), y = max(Dilution_Data$Qmax_R), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Qmax_R), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
-Qmax_Plot
+# Display the plot
+print(Qmax_Plot)
+
+```
+
+### \*\* Dilution Qmax Plot Surface OC- Manual Langmuir
+
+```{r}
+
+unique_Dilution_data_XPS <- unique_Dilution_data %>% filter(!is.na(XPS_OC))
+```
+
+```{r, warning=FALSE}
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(unique_Dilution_data_XPS, aes(x = XPS_OC, y = Qmax, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("OC Bulk") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Qmax ~ XPS_OC, data = unique_Dilution_data_XPS)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(XPS_OC), y = max(Qmax), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+```
+
+### \*\* Dilution Qmax Plot Net App H- Manual Langmuir
+
+```{r, warning=FALSE}
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(unique_Dilution_data, aes(x = net_app_H_diff_avg_abs, y = Qmax, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("Net Apparent Proton Charge Difference") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.7, 0.2),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Qmax ~ net_app_H_diff_avg_abs, data = unique_Dilution_data)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Qmax), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+```
+
+### Dilution Qmax Plot Net App H- Manual Langmuir (NO AO )
+
+```{r}
+ unique_Dilution_data_No_AO <- unique_Dilution_data %>% filter (Type != "AO")
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(unique_Dilution_data_No_AO, aes(x = net_app_H_diff_avg_abs, y = Qmax, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("Net Apparent Proton Charge Difference") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.7, 0.2),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Qmax ~ net_app_H_diff_avg_abs, data = unique_Dilution_data_No_AO)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Qmax), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
 ```
 
 ## Dose Isotherms
-
-### Filtering Dose Data
-
--   Only retaining biochars with percent standard deviation \< 25% and Q-Qsd is greater than 0
-
--   ALL_Biochars_Qsd_25: samples where stdev is less than 25%
-
--   ALL_Biochars_High_C_diff: samples where stdev is less than 25% and the difference between initial and equilibrium concentrations are greater than 90 mg/L
-
-```{r}
-
-ALL_Biochars <- ALL_Biochars %>%
-  filter (Q_NH4_avg >= 0 & Q_NH4_avg-Q_NH4_sd >= 0) 
-
-ALL_Biochars_Qsd_25 <- ALL_Biochars %>%
-  filter (Q_NH4_avg_sd_perc <=25) #%>%
-  #filter(Q_NH4_avg <= 3)
-
-ALL_Biochars_High_C_diff <- ALL_Biochars %>%
-  mutate(C_diff = Ammonium_moles_in_avg - Ammonium_moles_eq_avg ) %>%
-  filter(C_diff >= 90)
-
-ALL_Biochars_Qsd_25_High_C_diff <- ALL_Biochars_Qsd_25 %>%
-  mutate(C_diff = Ammonium_moles_in_avg - Ammonium_moles_eq_avg ) %>%
-  filter(C_diff >= 90)
-
-ALL_Biochars_Qsd_25_Q_3 <- ALL_Biochars %>%
-  filter (Q_NH4_avg_sd_perc <=25) %>%
-  filter(Q_NH4_avg <= 2.5)
-```
-
-### View AO and AL
-
-```{r}
-
-AO_AL_df <- ALL_Biochars_Qsd_25_High_C_diff %>%
-  filter(Type %in% c("AL", "AO")) %>%
-  select(C_diff, Type_ox)
-
-```
-
-### Dose only Plot - AO and AL
-
-```{r}
-
-ALL_Biochars_Only_AL_AO <- ALL_Biochars%>% filter((Type %in% c("AO", "AL")))
-
-Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_Only_AL_AO,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
-   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-    geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
-   geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
-  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
-  xlab("Equilibrium Concentration (mM)")+
-  ylab("Q (mmol NH4/g biochar)")+
-  #ggtitle()+
-  theme_classic(base_size = 28) +
-  theme(
-    text = element_text(family = "Times"),
-    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
-    axis.text.x = element_text(size = 24),
-    axis.text.y = element_text(size = 24),
-    axis.title.x = element_text(margin = margin(t = 20), size = 24),
-    axis.title.y = element_text(margin = margin(r = 20), size = 24),
-    panel.border = element_rect(color = "black", fill = NA, size = 3),
-    legend.text = element_text(size = 20),
-    legend.title = element_text(size = 24),
-    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
-  ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
-  guides(color = "none") #+
-  #scale_x_continuous(expand = c(0,0), limits = c(-15,650))+
-  #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
-Q_Conc_Dose_Plot
-```
-
-### 
 
 ## Dose Langmuir Isotherm
 
@@ -1252,7 +1715,10 @@ ALL_Biochars_Freund <- ALL_Biochars %>%
     }
     result$data  # Return only the modified dataframe
   }) %>%
-  ungroup()
+  ungroup() 
+
+ALL_Biochars_Freund <- ALL_Biochars_Freund %>%
+  distinct(Type_ox, .keep_all = TRUE)
 
 ```
 
@@ -1269,6 +1735,9 @@ ALL_Biochars_Qsd_25_Freund <- ALL_Biochars_Qsd_25 %>%
     result$data  # Return only the modified dataframe
   }) %>%
   ungroup()
+
+ALL_Biochars_Qsd_25_Freund <- ALL_Biochars_Qsd_25_Freund %>%
+  distinct(Type_ox, .keep_all = TRUE)
 ```
 
 ```{r}
@@ -1285,7 +1754,8 @@ ALL_Biochars_High_C_diff_Freund  <- ALL_Biochars_High_C_diff %>%
   }) %>%
   ungroup()
 
-
+ALL_Biochars_High_C_diff_Freund <- ALL_Biochars_High_C_diff_Freund %>%
+  distinct(Type_ox, .keep_all = TRUE)
 ```
 
 ```{r}
@@ -1301,6 +1771,9 @@ ALL_Biochars_Qsd_25_High_C_diff_Freund  <- ALL_Biochars_Qsd_25_High_C_diff %>%
     result$data  # Return only the modified dataframe
   }) %>%
   ungroup()
+
+ALL_Biochars_Qsd_25_High_C_diff_Freund <- ALL_Biochars_Qsd_25_High_C_diff_Freund %>%
+  distinct(Type_ox, .keep_all = TRUE)
 
 #freundlich_fit_test <- freundlichanalysis(ALL_Biochars_Qsd_25$Ammonium_moles_eq_avg[c(1:13)],ALL_Biochars_Qsd_25$Q_NH4_avg[c(1:13)])
 #Qmax <- langmuir_fit_test$plot_env$pars_Qmax
@@ -1319,6 +1792,9 @@ ALL_Biochars_Qsd_25_Q_3_Freund <- ALL_Biochars_Qsd_25_Q_3 %>%
     result$data  # Return only the modified dataframe
   }) %>%
   ungroup()
+
+ALL_Biochars_Qsd_25_Q_3_Freund <- ALL_Biochars_Qsd_25_Q_3_Freund %>%
+  distinct(Type_ox, .keep_all = TRUE)
 ```
 
 ## Freundlich Dose Plots
@@ -1692,10 +2168,9 @@ Qmax_Plot <- Qmax_Plot +
 Qmax_Plot
 ```
 
-### Dose Q-Plot Freundlich Q \< 3, Qsd \<25%, high_diff
+### Dose Q-Plot Freundlich Q \< 3, Qsd \<25%
 
-```{r}
-
+```{r, warning=FALSE}
 
 Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
@@ -1728,15 +2203,19 @@ Qmax_Plot <- Qmax_Plot +
 Qmax_Plot
 ```
 
-### Dose Q-Plot Freundlich Q \< 3, Qsd \<25%, high_diff No AL
+### \*\* Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL
+
+```{r}
+
+ALL_Biochars_Qsd_25_Q_3_Freund_No_AL <- ALL_Biochars_Qsd_25_Q_3_Freund %>% filter (Type != c("AL"))
+```
 
 ```{r, warning=FALSE}
 
-ALL_Biochars_Qsd_25_Q_3_Freund_No_AL <- ALL_Biochars_Qsd_25_Q_3_Freund %>% filter (Type != c("AL"))
-
+# Create the plot with unique data
 Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
   ylab("Q (mmol NH4/g biochar)") +
   theme_classic(base_size = 28) +
@@ -1751,37 +2230,66 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = OC, y = Q_400,
     legend.text = element_text(size = 20),
     legend.title = element_text(size = 24),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
-  ) 
+  )
 
-# Calculate R-squared value from the linear regression model
+# Fit the linear regression model to the unique data
 lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
-r_squared <- summary(lm_model)$r.squared
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
   geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
-Qmax_Plot
+# Display the plot
+print(Qmax_Plot)
+
 ```
 
-### Dose Q-Plot Freundlich Q \< 3, Qsd \<25%, high_diff No AL - OC_XPS
+### \*\*Q-Plot Freundlich Q \< 3, Qsd \<25%, No AL - OC_XPS
 
 ```{r}
 
 # Filter out missing or non-finite values
 ALL_Biochars_Qsd_25_Q_3_Freund_No_AL <- ALL_Biochars_Qsd_25_Q_3_Freund %>% 
   filter(Type != "AL" & !is.na(XPS_OC) & !is.na(Q_400))
+```
 
+```{r, warning=FALSE}
+
+# Create the plot with unique data
 Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = XPS_OC, y = Q_400, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Surface") +
-  ylab("Q max (mmol NH4/g biochar)") +
+  ylab("Q (mmol NH4/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
     text = element_text(family = "Times"),
-    legend.position = c(0.8, 0.1),
+    legend.position = c(0.1, 0.8),
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
     axis.title.x = element_text(margin = margin(t = 20), size = 24),
@@ -1790,35 +2298,58 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = XPS_OC, y = Q_
     legend.text = element_text(size = 20),
     legend.title = element_text(size = 24),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
-  ) 
+  )
 
-# Calculate R-squared value from the linear regression model
+# Fit the linear regression model to the unique data
 lm_model <- lm(Q_400 ~ XPS_OC, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
-r_squared <- summary(lm_model)$r.squared
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
   geom_text(aes(x = max(XPS_OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
-Qmax_Plot
+# Display the plot
+print(Qmax_Plot)
+
 ```
 
-### 
-
-### Dose Q-Plot Freundlich Q \< 3, Qsd \<25%, high_diff No AL Net App Diff
+### \*\*Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL Net App Diff
 
 ```{r, warning=FALSE}
 
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = net_app_H_diff_avg_abs , y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = net_app_H_diff_avg_abs, y = Q_400, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
-  xlab("Net App Proton Charge Diff") +
-  ylab("Q max (mmol NH4/g biochar)") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("Net Apparent Proton Charge Difference") +
+  ylab("Q (mmol NH4/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
     text = element_text(family = "Times"),
-    legend.position = c(0.8, 0.3),
+    legend.position = c(0.1, 0.8),
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
     axis.title.x = element_text(margin = margin(t = 20), size = 24),
@@ -1827,18 +2358,42 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = net_app_H_diff
     legend.text = element_text(size = 20),
     legend.title = element_text(size = 24),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
-  ) 
+  )
 
-# Calculate R-squared value from the linear regression model
+# Fit the linear regression model to the unique data
 lm_model <- lm(Q_400 ~ net_app_H_diff_avg_abs, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
-r_squared <- summary(lm_model)$r.squared
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
   geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
-            hjust = 1, vjust = 3, color = "black", size = 6)
+            hjust = 1, vjust = 5, color = "black", size = 6)
 
-Qmax_Plot
+# Display the plot
+print(Qmax_Plot)
 ```
 
 #### General non-Linear fit
@@ -2082,36 +2637,48 @@ ALL_Biochars_Qsd_25_High_C_diff_DR  <- ALL_Biochars_Qsd_25_High_C_diff %>%
 
 ```{r}
 
-# Function to fit Freundlich isotherm using PUPAIM and extract Q_400
+# Define the Elovich fitting function with plotting and Q_400 calculation
 fit_Elovich_pupaim <- function(df) {
   tryCatch({
     # Prepare data for PUPAIM
     C <- df$Ammonium_moles_eq_avg
     Q <- df$Q_NH4_avg
     
-    # Fit Freundlich isotherm using PUPAIM
+    # Fit Elovich isotherm using PUPAIM
     elovich_fit <- elovichanalysis(C, Q)
     
     # Extract parameters from the fitted model
-    #Kf <- BET_fit$plot_env$pars_KF
-   # n <- BET_fit$plot_env$pars_n
+    KE <- elovich_fit$plot_env$pars_KE
+    QmE <- elovich_fit$plot_env$pars_QmE
     
-    # Calculate Q at C = 400 using the Freundlich equation: Q = Kf * C^(1/n)
-    #C_target <- 400
-    #Q_400 <- Kf * C_target^(1/n)
+    # Calculate Q at C = 400 using the Elovich equation: Q = C / (QmE * KE * exp(-C/QmE))
+    C_target <- 300
+    Q_400 <- C_target / (QmE * KE * exp(-C_target / QmE))
     
     # Create a new column with Q_400 value repeated for each row
-    #df$Q_400 <- Q_400
+    df$Q_400 <- Q_400
+    
+    # Create a plot
+    df$Predicted <- C / (QmE * KE * exp(-C / QmE))
+    p <- ggplot(df, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg)) +
+      geom_point() +
+      geom_line(aes(y = Predicted), color = "blue") +
+      labs(title = paste("Elovich Fit for Type_ox =", unique(df$Type_ox)),
+           x = "Ammonium_moles_eq_avg",
+           y = "Q_NH4_avg") +
+      theme_minimal()
+    
+    # Print the plot
+    print(p)
     
     # Return both the modified dataframe and the plot
-    list(data = df, plot = elovich_fit)
+    list(data = df, plot = p)
   }, error = function(e) {
-    message("Error fitting BET model for Type_ox =", unique(df$Type_ox), ": ", e$message)
+    message("Error fitting Elovich model for Type_ox =", unique(df$Type_ox), ": ", e$message)
     #df$Q_400 <- NA  # Assign NA if fitting fails
     return(list(data = df, plot = NULL))
   })
 }
-
 ```
 
 ### Elovich Fit
@@ -2143,8 +2710,91 @@ ALL_Biochars_Qsd_25_High_C_diff_Elovich  <- ALL_Biochars_Qsd_25_High_C_diff %>%
     }
     result$data  # Return only the modified dataframe
   }) %>%
+  ungroup() 
+```
+
+```{r}
+
+ALL_Biochars_Qsd_25_Q_3_Elovich  <- ALL_Biochars_Qsd_25_Q_3 %>% 
+  group_by(Type_ox) %>%
+  do({
+    result <- fit_Elovich_pupaim(.)
+    # Print the plot if it exists
+    if (!is.null(result$plot)) {
+      print(result$plot)
+    }
+    result$data  # Return only the modified dataframe
+  }) %>%
   ungroup()
 ```
+
+### \*\* Dose Q-Plot Elovich Q \< 3, Qsd \<25% No AL
+
+```{r}
+
+ALL_Biochars_Qsd_25_Q_3_Elovich_No_AL <- ALL_Biochars_Qsd_25_Q_3_Elovich %>% filter (Type != c("AL"))
+```
+
+```{r, warning=FALSE}
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Elovich_No_AL, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Qsd_25_Q_3_Elovich_No_AL)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+```
+
+### 
 
 ## Non-Linear Fit
 
@@ -2172,7 +2822,7 @@ fit_nonlinear <- function(df) {
           print(summary(fit))
           
           # Calculate Q_NH4_avg at Ammonium_moles_eq_avg of 400
-          C_target <- 400
+          C_target <- 300
           a <- coef(fit)["a"]
           b <- coef(fit)["b"]
           Q_400 <- a * (C_target ^ (1/b))
@@ -2216,17 +2866,31 @@ ALL_Biochars_Qsd_25_High_C_diff_nls <- ALL_Biochars_Qsd_25_High_C_diff %>%
   group_by(Type_ox) %>%
   do(fit_nonlinear(.)) %>%
   ungroup()
+
+```
+
+```{r}
+
+ALL_Biochars_Qsd_25_Q_3_nls <- ALL_Biochars_Qsd_25_Q_3 %>%
+  group_by(Type_ox) %>%
+  do(fit_nonlinear(.)) %>%
+  ungroup()
 ```
 
 ### Non-Linear plots
 
 ```{r}
+ALL_Biochars_Qsd_25_Q_3_nls <- ALL_Biochars_Qsd_25_Q_3_nls %>% filter(Type != "AL")
+```
 
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_High_C_diff_nls, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+```{r}
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_nls, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
-  ylab("Q max (mmol NH4/g biochar)") +
+  ylab("Q (mmol NH4/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
     text = element_text(family = "Times"),
@@ -2239,18 +2903,165 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_High_C_diff_nls, aes(x = OC, y = Q_400, 
     legend.text = element_text(size = 20),
     legend.title = element_text(size = 24),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
-  ) 
+  )
 
-# Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Qsd_25_High_C_diff_nls)
-r_squared <- summary(lm_model)$r.squared
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Qsd_25_Q_3_nls)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
   geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
-Qmax_Plot
+# Display the plot
+print(Qmax_Plot)
+
+
+```
+
+```{r}
+ALL_Biochars_Qsd_25_Q_3_nls_XPS <- ALL_Biochars_Qsd_25_Q_3_nls %>% 
+    filter(Type != "AL" & !is.na(XPS_OC) & !is.na(Q_400))
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_nls_XPS, aes(x = XPS_OC, y = Q_400, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400 ~ XPS_OC, data = ALL_Biochars_Qsd_25_Q_3_nls_XPS)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(XPS_OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+
+```
+
+```{r}
+
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_nls, aes(x = net_app_H_diff_avg_abs, y = Q_400, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400 ~ net_app_H_diff_avg_abs, data = ALL_Biochars_Qsd_25_Q_3_nls)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
 ```
 
 ## Comparing all isotherms
@@ -2454,7 +3265,7 @@ Qmax_Plot_XPS <- ggplot(Dilution_Data_filtered, aes(x = XPS_OC, y = Qmax, color 
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Qmax ~ OC, data = Dilution_Data_filtered)
+lm_model <- lm(Qmax ~ XPS_OC, data = Dilution_Data_filtered)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
