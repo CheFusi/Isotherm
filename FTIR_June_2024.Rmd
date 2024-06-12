@@ -1,0 +1,401 @@
+---
+title: "FTIR_June_2024"
+output: html_document
+date: "2024-06-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+
+```{r}
+
+suppressPackageStartupMessages({library(readxl)
+                 library(plyr)
+                 library(dplyr)
+                 library(tidyr)
+                 library(ggfortify)
+                 library(tibble)
+                 library(here)
+                 library(ggbiplot)
+                 library(tidyverse)
+                 library(reshape)
+                 library(reshape2)
+                 library(prospectr)
+                 library(ggplot2)
+                 library(skimr)
+                })
+```
+
+```{r}
+
+ALL_Biochars <- readRDS("ALL_Biochars.RDS")
+
+nwraw0<- readRDS("/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/R/ICRAF&Lehmann/ICRAF_IR/ICRAF_IR_R_Project/ICRAF_IR/CEBUM/CEBUM/nwraw0.RDS")
+```
+
+```{r}
+
+
+# List of SSNs to filter the Berkeley samples 
+
+# ID list 
+
+ssn_list <- data.frame(
+  SSN = c("WA078289", "WA078290", "WA078291", "WA078292", "WA078293", "WA078294", "WA078295", 
+          "WA078296", "WA078297", "WA078298", "WA078299", "WA078300", "WA078301", "WA078302", 
+          "WA078303", "WA078304", "WA078305", "WA078306"),
+  Type_ox = c("AK_05", "AK_10", "AK_15", "AK_20", "AK_25", "AK_30", "AL_00", "AL_05", "AM_05", 
+              "AM_10", "AM_15", "AM_20", "AM_30", "AN_30", "AO_10", "AO_12", "AO_15", "AO_20")
+)
+
+# Filtering the DataFrame
+B_Bio <- nwraw0[grepl(paste(ssn_list$SSN, collapse = "|"), nwraw0$SSN), ]
+
+B_Bio_Smoo <- as.data.frame(savitzkyGolay(B_Bio[,-1], w=17, p=2, m=0))
+
+B_Bio_Smoo<-bind_cols(SSN=B_Bio$SSN,B_Bio_Smoo)
+
+B_Bio_Smoo <- merge(B_Bio_Smoo, ssn_list, by = "SSN", all.x = TRUE)
+
+ALL_Biochars_subset <- ALL_Biochars[, c("Type_ox", "XPS_OC", "OC")]
+
+
+df <- merge(B_Bio_Smoo, ALL_Biochars_subset, by = "Type_ox", all.x = TRUE)
+
+
+B_Bio_Smoo_Long <- melt(df, id.vars = c("SSN", "Type_ox", "XPS_OC", "OC"))
+
+
+
+```
+
+### Plot Original
+
+```{r}
+
+p <- ggplot(data = B_Bio_Smoo_Long, aes(x = as.numeric(as.vector(variable)), y = value, group = SSN))+ #, color = OC)) +
+  geom_line(size = 0.5, alpha = 0.9) +
+  facet_wrap(~ OC, scales = "free")+ 
+  xlim(rev(range(as.numeric(as.vector(B_Bio_Smoo_Long$variable))))) +
+  ylim(range(B_Bio_Smoo_Long$value)) + 
+  xlab(expression("Wavenumbers (cm)"^-1)) +
+  ylab("Absorbance units") +
+  theme_bw() +
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  ) +
+  scale_color_gradient(low = "purple", high = "yellow", name = "OC") # Custom color gradient
+
+p
+```
+
+### Normalize Data
+
+```{r}
+
+# # Convert the 'variable' column to numeric
+# B_Bio_Smoo_Long$variable <- as.numeric(as.character(B_Bio_Smoo_Long$variable))
+# 
+# # Identify the highest wavenumber for each SSN and its corresponding absorbance
+# highest_wavenumber <- B_Bio_Smoo_Long %>%
+#   group_by(SSN) %>%
+#   filter(variable == max(variable)) %>%
+#   select(SSN, value)
+# 
+# # Rename the 'value' column to 'max_value'
+# colnames(highest_wavenumber)[colnames(highest_wavenumber) == "value"] <- "max_value"
+# 
+# # Merge this information back into the original dataframe
+# B_Bio_Smoo_Long <- B_Bio_Smoo_Long %>%
+#   left_join(highest_wavenumber, by = "SSN") %>%
+#   mutate(normalized_value = value - max_value)
+
+
+```
+
+```{r}
+
+# Plot with normalized values
+# p <- ggplot(data = B_Bio_Smoo_Long, aes(x = as.numeric(as.vector(variable)), y = normalized_value, group = SSN, color = OC)) +
+#   geom_line(size = 0.5, alpha = 0.9) +
+#   xlim(rev(range(as.numeric(as.vector(B_Bio_Smoo_Long$variable))))) +
+#   ylim(range(B_Bio_Smoo_Long$normalized_value)) + 
+#   xlab(expression("Wavenumbers (cm)"^-1)) +
+#   ylab("Normalized Absorbance units") +
+#   theme_bw() +
+#   theme(
+#     plot.background = element_blank(),
+#     panel.grid.major = element_blank(),
+#     panel.grid.minor = element_blank(),
+#     panel.background = element_rect(fill = "white"),
+#     plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+#     axis.title.x = element_text(size = 12),
+#     axis.title.y = element_text(size = 12),
+#     axis.text = element_text(size = 10)
+#   ) +
+#   scale_color_gradient(low = "purple", high = "yellow", name = "OC") # Custom color gradient
+# p
+
+```
+
+### Plot by OC
+
+```{r}
+
+# Convert the 'variable' column to numeric
+B_Bio_Smoo_Long_ord <- B_Bio_Smoo_Long
+B_Bio_Smoo_Long_ord$variable <- as.numeric(as.character(B_Bio_Smoo_Long_ord$variable))
+
+# Order the dataframe by OC values
+ordered_samples <- B_Bio_Smoo_Long_ord %>%
+  distinct(SSN, OC) %>%
+  arrange(OC)
+
+# Create a new column for y-offset based on the order of OC
+B_Bio_Smoo_Long_ord <- B_Bio_Smoo_Long_ord %>%
+  select(-OC) %>%
+  left_join(ordered_samples, by = "SSN") %>%
+  mutate(y_offset = as.numeric(factor(SSN, levels = ordered_samples$SSN)) * 0.25)
+
+B_Bio_Smoo_Long_ord_4000 <- B_Bio_Smoo_Long_ord %>% filter (variable <= 4000)
+
+
+```
+
+```{r}
+
+# Plot with y-offset applied to value
+p <- ggplot(data = B_Bio_Smoo_Long_ord_4000, aes(x = variable, y = value + y_offset, group = SSN, color = OC)) +
+  geom_line(size = 0.5, alpha = 0.9) +
+  xlim(rev(range(B_Bio_Smoo_Long_ord_4000$variable))) +
+  xlab(expression("Wavenumbers (cm)"^-1)) +
+  ylab("Absorbance units") +
+  theme_bw() +
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  ) +
+  scale_color_gradient(low = "purple", high = "yellow", name = "OC") + # Custom color gradient
+  guides(color = guide_colorbar(title.position = "top"))+
+  geom_vline(xintercept = c(1040, 1709, 1215, 1570, 1417), linetype = "dashed", color = "black", size = 0.5)
+
+
+# Display the plot
+print(p)
+
+ggsave("Biochar_FTIR.png", plot = p, width = 8.5, height = 11, units = "in")
+```
+
+```{r}
+
+# Assuming B_Bio_Smoo_Long_ord_4000 is your dataframe
+
+# Create a summary dataframe to position labels at the end of the lines
+label_data <- B_Bio_Smoo_Long_ord_4000 %>%
+  group_by(SSN) %>%
+  filter(variable == min(variable)) %>% # Position label at the start of the line
+  summarise(
+    variable = max(variable),
+    value = value[which.max(variable)],
+    y_offset = y_offset[1],
+    Type_ox = Type_ox[1],
+    OC=OC[1]
+  )
+
+# Create the plot
+# Create the plot with ticks every 100 wavenumbers and reverse the x-axis
+p <- ggplot(data = B_Bio_Smoo_Long_ord_4000, aes(x = variable, y = value + y_offset, group = SSN, color = OC)) +
+  geom_line(size = 0.5, alpha = 0.9) +
+  scale_x_reverse(breaks = seq(0, max(B_Bio_Smoo_Long_ord_4000$variable), by = 200)) + # Ticks every 100 wavenumbers, reverse axis
+  xlab(expression("Wavenumbers (cm)"^-1)) +
+  ylab("Absorbance units") +
+  theme_bw() +
+  theme(
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  ) +
+  scale_color_gradient(low = "purple", high = "yellow", name = "OC") + # Custom color gradient
+  guides(color = guide_colorbar(title.position = "top")) +
+  geom_vline(xintercept = c(760, 819, 878, 1049, 1272, 1373, 1609, 1709, 3067, 3462), linetype = "dashed", color = "black", size = 0.5) + #1040, 1215,1417,
+  geom_text(data = label_data, aes(x = variable, y = value + y_offset, label = Type_ox), 
+            hjust = -0.1, size = 3, check_overlap = TRUE)
+
+# Display the plot
+print(p)
+
+# Save the plot with dimensions matching a standard sheet of printer paper
+ggsave("Biochar_FTIR.png", plot = p, width = 10.5, height = 11, units = "in")
+
+```
+
+### ID peaks
+
+```{r}
+
+
+# Assuming B_Bio_Smoo_Long_ord_4000 is your dataframe
+
+# Identify the peak wavenumber for the range 1550-1650
+peak_data_1550_1650 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 1550 & variable <= 1650)
+
+peak_wavenumbers_1550_1650 <- peak_data_1550_1650 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_1550_1650 = variable[which.max(value)],
+    peak_value_1550_1650 = max(value)
+  )
+
+# Identify the peak wavenumber for the range 1700-1725
+peak_data_1700_1725 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 1700 & variable <= 1725)
+
+peak_wavenumbers_1700_1725 <- peak_data_1700_1725 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_1700_1725 = variable[which.max(value)],
+    peak_value_1700_1725 = max(value)
+  )
+
+# Identify the peak wavenumber for the range 850-900
+peak_data_850_900 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 850 & variable <= 900)
+
+peak_wavenumbers_850_900 <- peak_data_850_900 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_850_900 = variable[which.max(value)],
+    peak_value_850_900 = max(value)
+  )
+
+# Identify the peak wavenumber for the range 750-800
+peak_data_750_800 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 750 & variable <= 800)
+
+peak_wavenumbers_750_800 <- peak_data_750_800 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_750_800 = variable[which.max(value)],
+    peak_value_750_800 = max(value)
+  )
+
+# Identify the peak wavenumber for the range 800-825
+peak_data_800_825 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 800 & variable <= 825)
+
+peak_wavenumbers_800_825 <- peak_data_800_825 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_800_825 = variable[which.max(value)],
+    peak_value_800_825 = max(value)
+  )
+
+# Identify the peak wavenumber for the range 3300-3500
+peak_data_3300_3500 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 3300 & variable <= 3500)
+
+peak_wavenumbers_3300_3500 <- peak_data_3300_3500 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_3300_3500 = variable[which.max(value)],
+    peak_value_3300_3500 = max(value)
+  )
+
+# Identify the peak wavenumber for the range 3000-3100
+peak_data_3000_3100 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 3000 & variable <= 3100)
+
+peak_wavenumbers_3000_3100 <- peak_data_3000_3100 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_3000_3100 = variable[which.max(value)],
+    peak_value_3000_3100 = max(value)
+  )
+
+# Identify the peak wavenumber for the range 1200-1300
+peak_data_1200_1300 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 1250 & variable <= 1300)
+
+peak_wavenumbers_1200_1300 <- peak_data_1200_1300 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_1200_1300 = variable[which.max(value)],
+    peak_value_1200_1300 = max(value)
+  )
+
+# Identify the peak wavenumber for the range 1000-1050
+peak_data_1000_1050 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 1000 & variable <= 1050)
+
+peak_wavenumbers_1000_1050 <- peak_data_1000_1050 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_1000_1050 = variable[which.max(value)],
+    peak_value_1000_1050 = max(value)
+  )
+
+# Identify the peak wavenumber for the range 1350-1400
+peak_data_1350_1400 <- B_Bio_Smoo_Long_ord_4000 %>%
+  filter(variable >= 1350 & variable <= 1400)
+
+peak_wavenumbers_1350_1400 <- peak_data_1350_1400 %>%
+  group_by(SSN) %>%
+  summarise(
+    peak_wavenumber_1350_1400 = variable[which.max(value)],
+    peak_value_1350_1400 = max(value)
+  )
+
+# Merge the peak information into one dataframe
+peak_wavenumbers <- peak_wavenumbers_1550_1650 %>%
+  left_join(peak_wavenumbers_1700_1725, by = "SSN") %>%
+  left_join(peak_wavenumbers_850_900, by = "SSN") %>%
+  left_join(peak_wavenumbers_750_800, by = "SSN") %>%
+  left_join(peak_wavenumbers_800_825, by = "SSN") %>%
+  left_join(peak_wavenumbers_3300_3500, by = "SSN") %>%
+  left_join(peak_wavenumbers_3000_3100, by = "SSN") %>%
+  left_join(peak_wavenumbers_1200_1300, by = "SSN") %>%
+  left_join(peak_wavenumbers_1000_1050, by = "SSN") %>%
+  left_join(peak_wavenumbers_1350_1400, by = "SSN")
+
+# Calculate the average wavenumbers for each peak range
+average_wavenumbers <- peak_wavenumbers %>%
+  summarise(
+    avg_peak_wavenumber_1550_1650 = mean(peak_wavenumber_1550_1650, na.rm = TRUE),
+    avg_peak_wavenumber_1700_1725 = mean(peak_wavenumber_1700_1725, na.rm = TRUE),
+    avg_peak_wavenumber_850_900 = mean(peak_wavenumber_850_900, na.rm = TRUE),
+    avg_peak_wavenumber_750_800 = mean(peak_wavenumber_750_800, na.rm = TRUE),
+    avg_peak_wavenumber_800_825 = mean(peak_wavenumber_800_825, na.rm = TRUE),
+    avg_peak_wavenumber_3300_3500 = mean(peak_wavenumber_3300_3500, na.rm = TRUE),
+    avg_peak_wavenumber_3000_3100 = mean(peak_wavenumber_3000_3100, na.rm = TRUE),
+    avg_peak_wavenumber_1200_1300 = mean(peak_wavenumber_1200_1300, na.rm = TRUE),
+    avg_peak_wavenumber_1000_1050 = mean(peak_wavenumber_1000_1050, na.rm = TRUE),
+    avg_peak_wavenumber_1350_1400 = mean(peak_wavenumber_1350_1400, na.rm = TRUE)
+  )
+
+# Display the peak wavenumbers and average wavenumbers dataframes
+print(peak_wavenumbers)
+print(average_wavenumbers)
+
+```

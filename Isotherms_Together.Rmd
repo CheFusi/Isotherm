@@ -291,10 +291,10 @@ AO_XPS_O<-c(18.50,27.23,22.45,20.17)
 AO_XPS_O_C<-((AO_XPS_O/AO_XPS_C)*(12/16))
 AO_XPS_O_C_1<-rep(AO_XPS_O_C,each=8)
 
-XPS_OC<-c(AK_XPS_O_C_1,AL_XPS_O_C_1,AM_XPS_O_C_1,AN_XPS_O_C_1,AO_XPS_O_C_1)
-ALL_Biochars$XPS_OC<-XPS_OC
+XPS_OC_old<-c(AK_XPS_O_C_1,AL_XPS_O_C_1,AM_XPS_O_C_1,AN_XPS_O_C_1,AO_XPS_O_C_1)
+ALL_Biochars$XPS_OC_old<-XPS_OC_old
 
-int_ALL$XPS_OC<-c(AM_XPS_O_C,AN_XPS_O_C,AK_XPS_O_C,AO_XPS_O_C,AO_XPS_O_C[1]) #only the first entry of AL since we only have AL00 samples for the int. iso data
+int_ALL$XPS_OC_old<-c(AM_XPS_O_C,AN_XPS_O_C,AK_XPS_O_C,AO_XPS_O_C,AO_XPS_O_C[1]) #only the first entry of AL since we only have AL00 samples for the int. iso data
 
 #Adding in int. iso data 
 
@@ -333,6 +333,18 @@ ALL_Biochars <- ALL_Biochars%>%
 # Loop through each column and replace NaN with NA
 #ALL_Biochars <- apply(ALL_Biochars, 2, function(x) ifelse(is.nan(x), NA, x))
 
+
+```
+
+### May 2024 Update -XPS
+
+```{r}
+
+XPS_OC_may24 <- read_excel("XPS_OC.xlsx")
+
+# Merge the expanded XPS_OC_may24 with ALL_Biochars
+ALL_Biochars <- ALL_Biochars %>%
+  left_join(XPS_OC_may24, by = "Type_ox")
 
 ```
 
