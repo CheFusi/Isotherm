@@ -29,6 +29,8 @@ libs <- c(libs_1, libs_2, libs_3, libs_4)
 
 # Suppress output unless there's an error
 invisible(lapply(libs, require, character.only = TRUE, quietly = TRUE))
+
+library(Metrics)
 ```
 
 ### Combining Dose and Dilutions
@@ -62,7 +64,7 @@ Dilution_Isotherm_All$AM_16$Type_ox <- gsub("AM_16", "AM_15", Dilution_Isotherm_
 Dilution_All <- do.call(rbind, Dilution_Isotherm_All)
 
 # Extract unique values for each "Type_ox" in ALL_Biochars
-unique_biochars <- unique(ALL_Biochars[, c("Type_ox", "OC", "SSA", "Type", "XPS_OC","OS_C","OD_C")])
+unique_biochars <- unique(ALL_Biochars[, c("Type_ox", "OC", "SSA", "Type", "XPS_OC", "O", "CH",	"C_O",	"Carb", "pi_pi",	"KsP",	"Carb_pi_Ksp")])
 
 # Merge the unique values with Dilution_All based on "Type_ox"
 merged_df <- merge(Dilution_All, unique_biochars, by = "Type_ox", all.x = TRUE)
@@ -75,8 +77,13 @@ Dilution_All$OC <- merged_df$OC[Dilution_All$match_idx]
 Dilution_All$SSA <- merged_df$SSA[Dilution_All$match_idx]
 Dilution_All$Type <- merged_df$Type[Dilution_All$match_idx]
 Dilution_All$XPS_OC <- merged_df$XPS_OC[Dilution_All$match_idx]
-Dilution_All$OS_C <- merged_df$OS_C[Dilution_All$match_idx]
-Dilution_All$OD_C <- merged_df$OD_C[Dilution_All$match_idx]
+Dilution_All$O <- merged_df$O[Dilution_All$match_idx]
+Dilution_All$CH <- merged_df$CH[Dilution_All$match_idx]
+Dilution_All$Carb <- merged_df$Carb[Dilution_All$match_idx]
+Dilution_All$C_O <- merged_df$C_O[Dilution_All$match_idx]
+Dilution_All$pi_pi <- merged_df$pi_pi[Dilution_All$match_idx]
+Dilution_All$KsP <- merged_df$KsP[Dilution_All$match_idx]
+Dilution_All$Carb_pi_Ksp <- merged_df$Carb_pi_Ksp[Dilution_All$match_idx]
 
 #Adding in Surface Area normalized Q 
 
@@ -84,8 +91,8 @@ Dilution_All <- Dilution_All %>%
   mutate(Q_NH4_avg_SSA = Q_NH4_avg / SSA)
 
 #check
-Dilution_View <- merged_df %>%
-  select(Type_ox, OC, XPS_OC, OS_C, OD_C)# Q_NH4_avg, Qmax)
+#Dilution_View <- merged_df %>%
+  #select(Type_ox, OC, XPS_OC, OS_C, OD_C)# Q_NH4_avg, Qmax)
 # Remove the match_idx column if no longer needed
 Dilution_All$match_idx <- NULL
 
@@ -1030,6 +1037,114 @@ Dilution_Data <- Dilution_Data %>%
 
 ```
 
+### \*\*\* Langmuir Dilution Plot
+
+```{r}
+
+# Define the Langmuir function
+Langmuir <- function(C, Qmax, K) {
+  Qmax * K * C / (1 + K * C)
+}
+
+# Function to fit Langmuir isotherm and extract Qmax, K, and R2
+fit_langmuir <- function(df) {
+  # Try a range of initial guesses to avoid singular gradient issues
+  start1 <- expand.grid(Qmax = seq(0, 100, length.out = 10), K = seq(0.001, 100, length.out = 10))
+  
+  tryCatch({
+    # Fit Langmuir isotherm
+    fit <- nls2::nls2(Q_NH4_avg ~ Langmuir(Ammonium_moles_eq_avg, Qmax, K),
+                      data = df,
+                      start = start1,  # Multiple starting points
+                      na.action = na.exclude, # Exclude rows with missing values
+                      control = nls.control(maxiter = 50, minFactor = 1e-8),
+                      algorithm = "port") # Increase max iterations and decrease minFactor
+    
+    # Extract coefficients from the fit
+    coefs <- coef(fit)
+    
+    # Calculate fitted values
+    fitted_values <- Langmuir(df$Ammonium_moles_eq_avg, coefs["Qmax"], coefs["K"])
+    
+    # Calculate R2 value
+    ss_total <- sum((df$Q_NH4_avg - mean(df$Q_NH4_avg))^2)
+    ss_residual <- sum((df$Q_NH4_avg - fitted_values)^2)
+    R2 <- 1 - (ss_residual / ss_total)
+    
+    # Add the fitted values to the original dataframe
+    df$Q_NH4_fit_Lang <- fitted_values
+    df$Qmax_Lang <- coefs["Qmax"]
+    df$K_Lang <- coefs["K"]
+    df$R2_Lang <- R2
+  }, error = function(e) {
+    # Handle errors by assigning NA to Qmax, K, Q_NH4_fit, and R2
+    df$Qmax_Lang <- NA
+    df$K_Lang <- NA
+    df$Q_NH4_fit_Lang <- NA
+    df$R2_Lang <- NA
+    message("Error fitting Langmuir model for Type_ox =", unique(df$Type_ox), ": ", e$message)
+  })
+  
+  return(df)
+}
+
+Dilution_Data <- Dilution_Data %>%
+  group_by(Type_ox) %>%
+  do(fit_langmuir(.)) %>%
+  ungroup() # Ungroup after processing
+
+Dilution_Data$Qmax_Lang <- as.numeric(Dilution_Data$Qmax_Lang)
+Dilution_Data$K_Lang <- as.numeric(Dilution_Data$K_Lang)
+Dilution_Data$R2_Lang <- as.numeric(Dilution_Data$R2_Lang)
+
+
+# Extract the parameters into a new dataframe
+Dilution_Lang_parameters <- Dilution_Data %>%
+  select(Type_ox, Qmax_Lang, K_Lang, R2_Lang) %>%
+  distinct() # Ensure unique entries
+```
+
+### \*\*\* Dilution with Langmuir Fits 
+
+```{r}
+
+
+# Plot the data along with the Langmuir isotherm line for each sample
+Q_Conc_Plot <- ggplot(Dilution_Data, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC, fill = OC, na.rm = TRUE)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_errorbarh(aes(xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd)) +
+  geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
+  geom_line(aes(y = Q_NH4_fit_Lang, group = Type_ox), linetype = "solid", size = 1.5) + # Add Langmuir isotherm line for each sample
+  facet_wrap(~ Type_ox, scales = "fixed") +
+  xlab("Equilibrium Concentration (mM)") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, -0.2),  # Adjusted legend position
+    legend.direction = "horizontal",
+    legend.key.width = unit(1, "cm"),  # Make legend wider
+    legend.key.height = unit(0.5, "cm"),  # Make legend thinner
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    plot.margin = margin(5, 5, 50, 5),  # Increased bottom margin to make space for the legend
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+  scale_fill_gradient(low = "purple", high = "yellow") +
+  scale_color_gradient(low = "purple", high = "yellow") +
+  guides(fill = "none")
+
+Q_Conc_Plot
+
+
+Q_Conc_Plot
+```
+
 ### Dilution Data - w/o Replciate OC and Qmax for s
 
 ```{r}
@@ -1280,6 +1395,76 @@ cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
   geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Qmax), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+```
+
+### Langmuir Dilution Outlier 
+
+```{r}
+
+unique_Dilution_data_Carb <- unique_Dilution_data %>%
+  filter (Carb_pi_Ksp <= 0.24)
+```
+
+### \*\* Dilution Qmax Plot (C=O)-O Manual Langmuir
+
+```{r, warning=FALSE}
+
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(unique_Dilution_data_Carb, aes(x = Carb, y = Qmax, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("(C=O)-O") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Qmax ~ Carb, data = unique_Dilution_data_Carb)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(Carb), y = max(Qmax), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 # Display the plot
@@ -1927,24 +2112,591 @@ fit_freundlich_pupaim <- function(df) {
 
 ```
 
-### Freundlich Fit
+### \*\*\* Freundlich Fit Dilution
 
 ```{r}
 
+
+# Define the Freundlich fitting function with plotting and Q_400 calculation
+fit_freundlich_pupaim <- function(df) {
+  tryCatch({
+    # Prepare data for PUPAIM
+    C <- df$Ammonium_moles_eq_avg
+    Q <- df$Q_NH4_avg
+    
+    # Fit Freundlich isotherm using PUPAIM (replace with actual function)
+    freundlich_fit <- freundlichanalysis(C, Q)  # This is a placeholder for the actual fitting function
+    
+    # Extract parameters from the fitted model
+    Kf <- freundlich_fit$plot_env$pars_KF
+    n <- freundlich_fit$plot_env$pars_n
+    
+    # Calculate Q at C = 400 using the Freundlich equation: Q = Kf * C^(1/n)
+    C_target <- 400
+    Q_400 <- Kf * C_target^(1/n)
+    
+    # Calculate fitted values
+    fitted_values <- Kf * (C ^ (1/n))
+    
+    # Calculate R2 value
+    ss_total <- sum((Q - mean(Q))^2)
+    ss_residual <- sum((Q - fitted_values)^2)
+    R2 <- 1 - (ss_residual / ss_total)
+    
+    # Add the fitted values and parameters to the original dataframe
+    df$Q_NH4_fit_Freundlich <- fitted_values
+    df$Kf_Freundlich <- Kf
+    df$n_Freundlich <- n
+    df$R2_Freundlich <- R2
+    df$Q_400_Freundlich <- Q_400
+    
+    # Create a plot
+    df$Predicted <- fitted_values
+    p <- ggplot(df, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg)) +
+      geom_point() +
+      geom_line(aes(y = Predicted), color = "blue") +
+      labs(title = paste("Freundlich Fit for Type_ox =", unique(df$Type_ox)),
+           x = "Ammonium_moles_eq_avg",
+           y = "Q_NH4_avg") +
+      theme_minimal()
+    
+    # Print the plot
+    print(p)
+    
+    return(df)
+  }, error = function(e) {
+    message("Error fitting Freundlich model for Type_ox =", unique(df$Type_ox), ": ", e$message)
+    df$Kf_Freundlich <- NA
+    df$n_Freundlich <- NA
+    df$R2_Freundlich <- NA
+    df$Q_400_Freundlich <- NA
+    df$Q_NH4_fit_Freundlich <- NA
+    return(df)
+  })
+}
+
+
+```
+
+## Freundlich Fit Dilution
+
+```{r}
+
+# Apply the fitting function to each group and update the dataframe
+Dilution_Data <- Dilution_Data %>%
+  group_by(Type_ox) %>%
+  do(fit_freundlich_pupaim(.)) %>%
+  ungroup()
+
+# Extract the parameters into a new dataframe
+Dilution_Freundlich_parameters <- Dilution_Data %>%
+  select(Type_ox, Kf_Freundlich, n_Freundlich, R2_Freundlich, Q_400_Freundlich) %>%
+  distinct()  # Ensure unique entries
+
+unique_Dilution_data <- Dilution_Data %>% distinct(Type_ox, .keep_all = TRUE)
+
+
+```
+
+## \*\*Freundlich Dilution Plots
+
+```{r}
+
+# Plot the data along with the Langmuir isotherm line for each sample
+Q_Conc_Plot <- ggplot(Dilution_Data, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC, fill = OC, na.rm = TRUE)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_errorbarh(aes(xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd)) +
+  geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
+  geom_line(aes(y = Q_NH4_fit_Freundlich, group = Type_ox), linetype = "solid", size = 1.5) + # Add Freundlich isotherm line for each sample
+  facet_wrap(~ Type_ox, scales = "fixed") +
+  xlab("Equilibrium Concentration (mM)") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, -0.2),  # Adjusted legend position
+    legend.direction = "horizontal",
+    legend.key.width = unit(1, "cm"),  # Make legend wider
+    legend.key.height = unit(0.5, "cm"),  # Make legend thinner
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    plot.margin = margin(5, 5, 50, 5),  # Increased bottom margin to make space for the legend
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+  scale_fill_gradient(low = "purple", high = "yellow") +
+  scale_color_gradient(low = "purple", high = "yellow") +
+  guides(fill = "none")
+
+Q_Conc_Plot
+
+```
+
+### \*\* Freundlich Dilution Bulk OC
+
+```{r, warning=FALSE}
+
+
+# Create the plot with unique data
+Q_300_Freund_Plot <- ggplot(unique_Dilution_data, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("OC Bulk") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400_Freundlich ~ OC, data = unique_Dilution_data)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Q_300_Freund_Plot <- Q_300_Freund_Plot +
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Q_300_Freund_Plot)
+
+```
+
+### \*\* Freundlich Dilution Surface OC
+
+```{r, warning=FALSE}
+
+
+# Create the plot with unique data
+Q_300_Freund_Plot <- ggplot(unique_Dilution_data, aes(x = XPS_OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("OC Surface") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400_Freundlich ~ XPS_OC, data = unique_Dilution_data)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Q_300_Freund_Plot <- Q_300_Freund_Plot +
+  geom_text(aes(x = max(XPS_OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Q_300_Freund_Plot)
+
+```
+
+### \*\* Freundlich Dilution Net App
+
+```{r, warning=FALSE}
+
+# Create the plot with unique data
+Q_300_Freund_Plot <- ggplot(unique_Dilution_data, aes(x = net_app_H_diff_avg_abs, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("Net Apparent Proton Charge Difference") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400_Freundlich ~ net_app_H_diff_avg_abs, data = unique_Dilution_data)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Q_300_Freund_Plot <- Q_300_Freund_Plot +
+  geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Q_300_Freund_Plot)
+
+
+```
+
+### Freundlich Dilution Carb_pi
+
+```{r}
+
+
+# Create the plot with unique data
+Q_300_Freund_Plot <- ggplot(unique_Dilution_data, aes(x = Carb_pi_Ksp, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("(C=O)-O All") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400_Freundlich ~ Carb_pi_Ksp, data = unique_Dilution_data)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Q_300_Freund_Plot <- Q_300_Freund_Plot +
+  geom_text(aes(x = max(Carb_pi_Ksp), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Q_300_Freund_Plot)
+
+```
+
+### Freundlich Dilution Carb only
+
+```{r}
+
+# Create the plot with unique data
+Q_300_Freund_Plot <- ggplot(unique_Dilution_data, aes(x = Carb, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("(C=O)-O") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400_Freundlich ~ Carb, data = unique_Dilution_data)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Q_300_Freund_Plot <- Q_300_Freund_Plot +
+  geom_text(aes(x = max(Carb), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Q_300_Freund_Plot) 
+
+
+```
+
+### Freundlich Dilution Outlier
+
+```{r}
+
+unique_Dilution_data_Carb <- unique_Dilution_data %>%
+  filter (Carb_pi_Ksp <= 0.24)
+```
+
+### Freundlich Dilution Carb_pi no Outlier
+
+```{r}
+
+
+# Create the plot with unique data
+Q_300_Freund_Plot <- ggplot(unique_Dilution_data_Carb, aes(x = Carb_pi_Ksp, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("(C=O)-O All") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400_Freundlich ~ Carb_pi_Ksp, data = unique_Dilution_data_Carb)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Q_300_Freund_Plot <- Q_300_Freund_Plot +
+  geom_text(aes(x = max(Carb_pi_Ksp), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Q_300_Freund_Plot)
+
+```
+
+### Freundlich Dilution Carb only no Outlier
+
+```{r, warning=FALSE}
+
+# Create the plot with unique data
+Q_300_Freund_Plot <- ggplot(unique_Dilution_data_Carb, aes(x = Carb, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("(C=O)-O") +
+  ylab("Q max (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400_Freundlich ~ Carb, data = unique_Dilution_data_Carb)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* Net_App_H\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Q_300_Freund_Plot <- Q_300_Freund_Plot +
+  geom_text(aes(x = max(Carb), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Q_300_Freund_Plot) 
+
+
+```
+
+### Freundlich Fit Dose
+
+```{r}
+
+# Apply the fitting function to each group and update the dataframe
 ALL_Biochars_Freund <- ALL_Biochars %>%
   group_by(Type_ox) %>%
-  do({
-    result <- fit_freundlich_pupaim(.)
-    # Print the plot if it exists
-    if (!is.null(result$plot)) {
-      print(result$plot)
-    }
-    result$data  # Return only the modified dataframe
-  }) %>%
-  ungroup() 
+  do(fit_freundlich_pupaim(.)) %>%
+  ungroup()
 
 ALL_Biochars_Freund <- ALL_Biochars_Freund %>%
   distinct(Type_ox, .keep_all = TRUE)
+
+# Extract the parameters into a new dataframe
+ALL_Biochars_Freund_parameters <- ALL_Biochars_Freund %>%
+  select(Type_ox, Kf_Freundlich, n_Freundlich, R2_Freundlich, Q_400_Freundlich) %>%
+  distinct()  # Ensure unique entries
+
+unique_Dilution_data <- Dilution_Data %>% distinct(Type_ox, .keep_all = TRUE)
 
 ```
 
@@ -1952,14 +2704,7 @@ ALL_Biochars_Freund <- ALL_Biochars_Freund %>%
 
 ALL_Biochars_Qsd_25_Freund <- ALL_Biochars_Qsd_25 %>%
   group_by(Type_ox) %>%
-  do({
-    result <- fit_freundlich_pupaim(.)
-    # Print the plot if it exists
-    if (!is.null(result$plot)) {
-      print(result$plot)
-    }
-    result$data  # Return only the modified dataframe
-  }) %>%
+  do(fit_freundlich_pupaim(.)) %>%
   ungroup()
 
 ALL_Biochars_Qsd_25_Freund <- ALL_Biochars_Qsd_25_Freund %>%
@@ -1970,14 +2715,7 @@ ALL_Biochars_Qsd_25_Freund <- ALL_Biochars_Qsd_25_Freund %>%
 
 ALL_Biochars_High_C_diff_Freund  <- ALL_Biochars_High_C_diff %>%
   group_by(Type_ox) %>%
-  do({
-    result <- fit_freundlich_pupaim(.)
-    # Print the plot if it exists
-    if (!is.null(result$plot)) {
-      print(result$plot)
-    }
-    result$data  # Return only the modified dataframe
-  }) %>%
+  do(fit_freundlich_pupaim(.)) %>%
   ungroup()
 
 ALL_Biochars_High_C_diff_Freund <- ALL_Biochars_High_C_diff_Freund %>%
@@ -1988,14 +2726,7 @@ ALL_Biochars_High_C_diff_Freund <- ALL_Biochars_High_C_diff_Freund %>%
 
 ALL_Biochars_Qsd_25_High_C_diff_Freund  <- ALL_Biochars_Qsd_25_High_C_diff %>% 
   group_by(Type_ox) %>%
-  do({
-    result <- fit_freundlich_pupaim(.)
-    # Print the plot if it exists
-    if (!is.null(result$plot)) {
-      print(result$plot)
-    }
-    result$data  # Return only the modified dataframe
-  }) %>%
+  do(fit_freundlich_pupaim(.)) %>%
   ungroup()
 
 ALL_Biochars_Qsd_25_High_C_diff_Freund <- ALL_Biochars_Qsd_25_High_C_diff_Freund %>%
@@ -2009,14 +2740,7 @@ ALL_Biochars_Qsd_25_High_C_diff_Freund <- ALL_Biochars_Qsd_25_High_C_diff_Freund
 
 ALL_Biochars_Qsd_25_Q_3_Freund <- ALL_Biochars_Qsd_25_Q_3 %>% 
   group_by(Type_ox) %>%
-  do({
-    result <- fit_freundlich_pupaim(.)
-    # Print the plot if it exists
-    if (!is.null(result$plot)) {
-      print(result$plot)
-    }
-    result$data  # Return only the modified dataframe
-  }) %>%
+  do(fit_freundlich_pupaim(.)) %>%
   ungroup()
 
 ALL_Biochars_Qsd_25_Q_3_Freund <- ALL_Biochars_Qsd_25_Q_3_Freund %>%
@@ -2030,7 +2754,7 @@ ALL_Biochars_Qsd_25_Q_3_Freund <- ALL_Biochars_Qsd_25_Q_3_Freund %>%
 ```{r}
 
 
-Qmax_Plot <- ggplot(ALL_Biochars_Freund, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Freund, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2050,12 +2774,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_Freund, aes(x = OC, y = Q_400, color = Type, fi
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Freund)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Freund)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2066,7 +2790,7 @@ Qmax_Plot
 ```{r}
 
 
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Freund, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Freund, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2086,12 +2810,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Freund, aes(x = OC, y = Q_400, color = T
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Qsd_25_Freund)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Qsd_25_Freund)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2104,7 +2828,7 @@ Qmax_Plot
 ALL_Biochars_Qsd_25_Freund_no_AO_AL<- ALL_Biochars_Qsd_25_Freund%>%
     filter(!(Type %in% c("AO", "AL")))
 
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Freund_no_AO_AL, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Freund_no_AO_AL, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2124,12 +2848,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Freund_no_AO_AL, aes(x = OC, y = Q_400, 
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Qsd_25_Freund_no_AO_AL)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Qsd_25_Freund_no_AO_AL)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2139,7 +2863,7 @@ Qmax_Plot
 
 ```{r}
 
-Qmax_Plot <- ggplot(ALL_Biochars_High_C_diff_Freund, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_High_C_diff_Freund, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2159,12 +2883,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_High_C_diff_Freund, aes(x = OC, y = Q_400, colo
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_High_C_diff_Freund)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_High_C_diff_Freund)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2174,7 +2898,7 @@ Qmax_Plot
 
 ```{r}
 
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_High_C_diff_Freund, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_High_C_diff_Freund, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2194,12 +2918,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_High_C_diff_Freund, aes(x = OC, y = Q_40
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Qsd_25_High_C_diff_Freund)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Qsd_25_High_C_diff_Freund)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2212,7 +2936,7 @@ Qmax_Plot
 ALL_Biochars_High_C_diff_Freund_no_AO_AL <- ALL_Biochars_High_C_diff_Freund %>%
     filter(!(Type %in% c("AO", "AL")))
 
-Qmax_Plot <- ggplot(ALL_Biochars_High_C_diff_Freund_no_AO_AL, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_High_C_diff_Freund_no_AO_AL, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2232,12 +2956,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_High_C_diff_Freund_no_AO_AL, aes(x = OC, y = Q_
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_High_C_diff_Freund_no_AO_AL)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_High_C_diff_Freund_no_AO_AL)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2251,7 +2975,7 @@ Qmax_Plot
 ALL_Biochars_Freund_no_AO_AL <- ALL_Biochars_Freund %>% 
     filter(!(Type %in% c("AO", "AL")))
 
-Qmax_Plot <- ggplot(ALL_Biochars_Freund_no_AO_AL, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Freund_no_AO_AL, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2271,12 +2995,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_Freund_no_AO_AL, aes(x = OC, y = Q_400, color =
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Freund_no_AO_AL)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Freund_no_AO_AL)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2289,7 +3013,7 @@ Qmax_Plot
 
 ALL_Biochars_Freund_no_AO <- ALL_Biochars_Freund %>% filter (Type != c("AO"))
 
-Qmax_Plot <- ggplot(ALL_Biochars_Freund_no_AO, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Freund_no_AO, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2309,12 +3033,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_Freund_no_AO, aes(x = OC, y = Q_400, color = Ty
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Freund_no_AO)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Freund_no_AO)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2327,7 +3051,7 @@ Qmax_Plot
 
 ALL_Biochars_Freund_High_C_diff_AO <- ALL_Biochars_Freund %>% filter (Type == c("AO"))
 
-Qmax_Plot <- ggplot(ALL_Biochars_Freund_High_C_diff_AO, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Freund_High_C_diff_AO, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2347,12 +3071,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_Freund_High_C_diff_AO, aes(x = OC, y = Q_400, c
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Freund_High_C_diff_AO)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Freund_High_C_diff_AO)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2363,7 +3087,7 @@ Qmax_Plot
 
 ALL_Biochars_Freund_High_C_diff_AL <- ALL_Biochars_Freund %>% filter (Type == c("AL"))
 
-Qmax_Plot <- ggplot(ALL_Biochars_Freund_High_C_diff_AL, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Freund_High_C_diff_AL, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2383,12 +3107,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_Freund_High_C_diff_AL, aes(x = OC, y = Q_400, c
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Freund_High_C_diff_AL)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Freund_High_C_diff_AL)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2398,7 +3122,7 @@ Qmax_Plot
 
 ```{r, warning=FALSE}
 
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = FALSE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2418,12 +3142,12 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund, aes(x = OC, y = Q_400, color
   ) 
 
 # Calculate R-squared value from the linear regression model
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Qsd_25_Q_3_Freund)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Qsd_25_Q_3_Freund)
 r_squared <- summary(lm_model)$r.squared
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 Qmax_Plot
@@ -2439,7 +3163,7 @@ ALL_Biochars_Qsd_25_Q_3_Freund_No_AL <- ALL_Biochars_Qsd_25_Q_3_Freund %>% filte
 ```{r, warning=FALSE}
 
 # Create the plot with unique data
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
@@ -2459,7 +3183,7 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = OC, y = Q_400,
   )
 
 # Fit the linear regression model to the unique data
-lm_model <- lm(Q_400 ~ OC, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
+lm_model <- lm(Q_400_Freundlich ~ OC, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
 
 # Summary of the regression model
 summary_lm <- summary(lm_model)
@@ -2487,7 +3211,7 @@ cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 # Display the plot
@@ -2501,13 +3225,13 @@ print(Qmax_Plot)
 
 # Filter out missing or non-finite values
 ALL_Biochars_Qsd_25_Q_3_Freund_No_AL <- ALL_Biochars_Qsd_25_Q_3_Freund %>% 
-  filter(Type != "AL" & !is.na(XPS_OC) & !is.na(Q_400))
+  filter(Type != "AL" & !is.na(XPS_OC) & !is.na(Q_400_Freundlich))
 ```
 
 ```{r, warning=FALSE}
 
 # Create the plot with unique data
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = XPS_OC, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = XPS_OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Surface") +
@@ -2527,7 +3251,7 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = XPS_OC, y = Q_
   )
 
 # Fit the linear regression model to the unique data
-lm_model <- lm(Q_400 ~ XPS_OC, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
+lm_model <- lm(Q_400_Freundlich ~ XPS_OC, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
 
 # Summary of the regression model
 summary_lm <- summary(lm_model)
@@ -2555,7 +3279,7 @@ cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(XPS_OC), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(XPS_OC), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 # Display the plot
@@ -2563,15 +3287,15 @@ print(Qmax_Plot)
 
 ```
 
-### Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL - C-O
+### Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL -COO
 
 ```{r, warning=FALSE}
 
 # Create the plot with unique data
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = OS_C, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = Carb_pi_Ksp, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
-  xlab("OC Surface") +
+  xlab("C=O)-O") +
   ylab("Q (mmol NH4/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
@@ -2588,7 +3312,7 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = OS_C, y = Q_40
   )
 
 # Fit the linear regression model to the unique data
-lm_model <- lm(Q_400 ~ OS_C, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
+lm_model <- lm(Q_400_Freundlich ~ Carb_pi_Ksp, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
 
 # Summary of the regression model
 summary_lm <- summary(lm_model)
@@ -2616,7 +3340,7 @@ cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OS_C), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(Carb_pi_Ksp), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 # Display the plot
@@ -2625,15 +3349,21 @@ print(Qmax_Plot)
 
 ```
 
-### Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL - C=O
+### Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL - COO_pi no outlier
+
+```{r}
+
+ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_Carb <- ALL_Biochars_Qsd_25_Q_3_Freund_No_AL %>%
+  filter (Carb_pi_Ksp <= 0.24)
+```
 
 ```{r, warning=FALSE}
 
 # Create the plot with unique data
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = OD_C, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_Carb, aes(x = Carb_pi_Ksp, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
-  xlab("C Double Bond O to C") +
+  xlab("(C=O)-O") +
   ylab("Q (mmol NH4/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
@@ -2650,7 +3380,7 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = OD_C, y = Q_40
   )
 
 # Fit the linear regression model to the unique data
-lm_model <- lm(Q_400 ~ OD_C, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
+lm_model <- lm(Q_400_Freundlich ~ Carb_pi_Ksp, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_Carb)
 
 # Summary of the regression model
 summary_lm <- summary(lm_model)
@@ -2678,18 +3408,142 @@ cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OD_C), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(Carb_pi_Ksp), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 # Display the plot
 print(Qmax_Plot)
 ```
 
-### \*\*Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL Net App Diff
+### Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL - Carb only
+
+```{r}
+
+
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = Carb, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("C=O)-O") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400_Freundlich ~ Carb, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(Carb), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+```
 
 ```{r, warning=FALSE}
 
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = net_app_H_diff_avg_abs, y = Q_400, color = Type, fill = Type)) +
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_Carb, aes(x = Carb, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("C=O)-O") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_400_Freundlich ~ Carb, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_Carb)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(Carb), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+
+```
+
+### Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL Net App Diff
+
+```{r, warning=FALSE}
+
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = net_app_H_diff_avg_abs, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("Net Apparent Proton Charge Difference") +
@@ -2709,7 +3563,7 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL, aes(x = net_app_H_diff
   )
 
 # Fit the linear regression model to the unique data
-lm_model <- lm(Q_400 ~ net_app_H_diff_avg_abs, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
+lm_model <- lm(Q_400_Freundlich ~ net_app_H_diff_avg_abs, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL)
 
 # Summary of the regression model
 summary_lm <- summary(lm_model)
@@ -2737,7 +3591,7 @@ cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 # Display the plot
@@ -2748,12 +3602,12 @@ print(Qmax_Plot)
 
 ```{r}
 ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_No_AO <- ALL_Biochars_Qsd_25_Q_3_Freund %>% 
-  filter(!Type %in% c("AL","AO") & !is.na(XPS_OC) & !is.na(Q_400))
+  filter(!Type %in% c("AL","AO") & !is.na(XPS_OC) & !is.na(Q_400_Freundlich))
 ```
 
 ```{r, warning=FALSE}
 
-Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_No_AO, aes(x = net_app_H_diff_avg_abs, y = Q_400, color = Type, fill = Type)) +
+Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_No_AO, aes(x = net_app_H_diff_avg_abs, y = Q_400_Freundlich, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
   geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("Net Apparent Proton Charge Difference") +
@@ -2773,7 +3627,7 @@ Qmax_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_No_AO, aes(x = net_app_
   )
 
 # Fit the linear regression model to the unique data
-lm_model <- lm(Q_400 ~ net_app_H_diff_avg_abs, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_No_AO)
+lm_model <- lm(Q_400_Freundlich ~ net_app_H_diff_avg_abs, data = ALL_Biochars_Qsd_25_Q_3_Freund_No_AL_No_AO)
 
 # Summary of the regression model
 summary_lm <- summary(lm_model)
@@ -2801,7 +3655,7 @@ cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Q_400), label = paste("R^2 =", round(r_squared, 2))),
+  geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Q_400_Freundlich), label = paste("R^2 =", round(r_squared, 2))),
             hjust = 1, vjust = 5, color = "black", size = 6)
 
 # Display the plot
@@ -3478,148 +4332,423 @@ print(Qmax_Plot)
 
 ## Comparing all isotherms
 
+### Comparing Isotherns with 0
+
+### Manual Freundlich for Dose
+
 ```{r}
 
-# Function to extract adjusted R-squared values for Langmuir
-fit_langmuir_pupaim <- function(df) {
-  # Prepare data for PUPAIM
-  C <- df$Ammonium_moles_eq_avg
-  Q <- df$Q_NH4_avg
-  
-  # Capture the output of langmuiranalysis (replace with actual fitting function)
-  langmuir_fit_test_output <- capture.output(langmuiranalysis(C, Q))
-  
-  # Extract the Adjusted R-squared value
-  adjusted_r_squared_line <- grep("Adjusted R-squared", langmuir_fit_test_output, value = TRUE)
-  
-  if (length(adjusted_r_squared_line) == 0) {
-    adjusted_r_squared_value <- NA
-  } else {
-    adjusted_r_squared_value <- as.numeric(sub(".*Adjusted R-squared: *", "", adjusted_r_squared_line))
-  }
-  
-  # Return a named list
-  return(list(Langmuir_adj_r2 = adjusted_r_squared_value))
-}
+# Building the Freundlich isotherm nonlinear form
+freundlichanalysis <- function(Ce, Qe){
+  x <- Ce
+  y <- Qe
+  data <- data.frame(x, y)
 
-# Function to extract adjusted R-squared values for Temkin
-fit_Temkin_pupaim <- function(df) {
-  C <- df$Ammonium_moles_eq_avg
-  Q <- df$Q_NH4_avg
-  T <- 298 # K
-    
-  # Capture the output of temkinanalysis
-  Temkin_fit_test_output <- capture.output(temkinanalysis(C, Q, T))
-    
-  # Extract the Adjusted R-squared value
-  adjusted_r_squared_line <- grep("Adjusted R-squared", Temkin_fit_test_output, value = TRUE)
-  adjusted_r_squared_value <- as.numeric(sub(".*Adjusted R-squared: *", "", adjusted_r_squared_line))
+  # Freundlich isotherm nonlinear equation
+  fit1 <- y ~ (KF * (x^(1 / n)))
+
+  # Setting of starting values
+  start1 <- data.frame(KF = c(0.001, 10), n = c(0.001, 10))
+
+  # Fitting of Freundlich isotherm via nls2
+  fit2 <- nls2::nls2(fit1, start = start1, data = data,
+                     control = nls.control(maxiter = 45, warnOnly = TRUE),
+                     algorithm = "port")
   
-  # Return a named list
-  return(list(Temkin_adj_r2 = adjusted_r_squared_value))
+  
+
+  print("Freundlich Isotherm Analysis")
+  print(summary(fit2))
+
+  print("Akaike Information Criterion")
+  print(AIC(fit2))
+
+  print("Bayesian Information Criterion")
+  BIC <- BIC(fit2)
+  print(BIC)
+
+  # Error analysis of the Freundlich isotherm model
+  errors <- function(y){
+    rmse <- Metrics::rmse(y, predict(fit2))
+    mae <- Metrics::mae(y, predict(fit2))
+    mse <- Metrics::mse(y, predict(fit2))
+    rae <- Metrics::rae(y, predict(fit2))
+    N <- nrow(na.omit(data))
+    SE <- sqrt((sum(y - predict(fit2))^2) / (N - 2))
+    list("Root Mean Squared Error" = rmse,
+         "Mean Absolute Error" = mae,
+         "Mean Squared Error" = mse,
+         "Root Absolute Error" = rae,
+         "Standard Error for the Regression S" = SE)
+  }
+  a <- errors(y)
+  print(a)
+
+  rsqq <- lm(Qe ~ predict(fit2))
+  rsq_summary <- summary(rsqq)
+  print(rsq_summary)
+
+  adj_r_squared <- rsq_summary$adj.r.squared
+  print(paste("Adjusted R-squared: ", adj_r_squared))
+
+  # Graphical representation of the Freundlich isotherm model
+  ### Predicted parameter values
+  parsFreundlich <- as.vector(coefficients(fit2))
+  pars_KF <- parsFreundlich[1L]
+  pars_n <- parsFreundlich[2L]
+
+  rhs <- function(x){(pars_KF * (x^(1 / pars_n)))}
+
+  #### Plot details
+  ggplot2::theme_set(ggplot2::theme_bw(10))
+  plot <- ggplot2::ggplot(data, ggplot2::aes(x = x, y = y)) +
+    ggplot2::geom_point(color = "#3498DB") +
+    ggplot2::geom_function(color = "#D35400", fun = rhs) +
+    ggplot2::labs(x = "Ce",
+                  y = "Qe",
+                  title = "Freundlich Isotherm Nonlinear Model",
+                  caption = "PUPAIM") +
+    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
+
+  return(list(adj_r_squared = adj_r_squared, plot = plot))
 }
 
 # Function to extract adjusted R-squared values for Freundlich
 fit_freundlich_pupaim <- function(df) {
-  # Prepare data for PUPAIM
-  C <- df$Ammonium_moles_eq_avg
-  Q <- df$Q_NH4_avg
+  C <- c(0.001, df$Ammonium_moles_eq_avg)
+  Q <- c(0.001, df$Q_NH4_avg)
   
-  # Capture the output of freundlichanalysis (replace with actual fitting function)
-  freundlich_fit_test_output <- capture.output(freundlichanalysis(C, Q))
-  
-  # Extract the Adjusted R-squared value
-  adjusted_r_squared_line <- grep("Adjusted R-squared", freundlich_fit_test_output, value = TRUE)
-  adjusted_r_squared_value <- as.numeric(sub(".*Adjusted R-squared: *", "", adjusted_r_squared_line))
+  # Capture the output of freundlichanalysis
+  result <- freundlichanalysis(C, Q)
   
   # Return a named list
-  return(list(Freundlich_adj_r2 = adjusted_r_squared_value))
+  return(list(Freundlich_adj_r2 = result$adj_r_squared, Freundlich_plot = result$plot))
 }
-
-# Function to extract adjusted R-squared values for DR
-fit_DR_pupaim <- function(df) {
-  C <- df$Ammonium_moles_eq_avg
-  Q <- df$Q_NH4_avg
-  T <- 298 # K
-    
-  # Capture the output of Dubinin-Radushkevich isotherm analysis
-  DR_fit_output <- capture.output(dubininradushkevichanalysis(C, Q, T))
-  print(DR_fit_output)
-    
-  # Extract the Adjusted R-squared value
-  adjusted_r_squared_line <- grep("Adjusted R-squared", DR_fit_output, value = TRUE)
-  adjusted_r_squared_value <- as.numeric(sub(".*Adjusted R-squared: *", "", adjusted_r_squared_line))
-  
-  # Return as data frame
-  data.frame(DR_adj_r2 = adjusted_r_squared_value)
-}
-
-# Function to extract adjusted R-squared values for Elovich
-fit_elovich_pupaim <- function(df) {
-  # Prepare data for PUPAIM
-  C <- df$Ammonium_moles_eq_avg
-  Q <- df$Q_NH4_avg
-  
-  # Capture the output of Elovich analysis (replace with actual fitting function)
-  elovich_fit_test_output <- capture.output(elovichanalysis(C, Q))
-  
-  # Extract the Adjusted R-squared value
-  adjusted_r_squared_line <- grep("Adjusted R-squared", elovich_fit_test_output, value = TRUE)
-  
-  if (length(adjusted_r_squared_line) == 0) {
-    adjusted_r_squared_value <- NA
-  } else {
-    adjusted_r_squared_value <- as.numeric(sub(".*Adjusted R-squared: *", "", adjusted_r_squared_line))
-  }
-  
-  # Return a named list
-  data.frame(Elovich_adj_r2 = adjusted_r_squared_value)
-}
-
-# # Function to extract adjusted R-squared values for BET
-# fit_bet_pupaim <- function(df) {
-#   # Prepare data for PUPAIM
-#   C <- df$Ammonium_moles_eq_avg
-#   Q <- df$Q_NH4_avg
-#   
-#   # Capture the output of BET analysis (replace with actual fitting function)
-#   bet_fit_test_output <- capture.output(BETanalysis(C, Q))
-#   
-#   # Extract the Adjusted R-squared value
-#   adjusted_r_squared_line <- grep("Adjusted R-squared", bet_fit_test_output, value = TRUE)
-#   
-#   if (length(adjusted_r_squared_line) == 0) {
-#     adjusted_r_squared_value <- NA
-#   } else {
-#     adjusted_r_squared_value <- as.numeric(sub(".*Adjusted R-squared: *", "", adjusted_r_squared_line))
-#   }
-#   
-#   # Return a named list
-#   return(list(BET_adj_r2 = adjusted_r_squared_value))
-# }
-
-#---------------------------------------------------------------------------------
-
-# Apply the Langmuir function to each group
-adjusted_r2_langmuir_df <- ALL_Biochars_Qsd_25_Q_3 %>%
-  group_by(Type_ox) %>%
-  do(result = fit_langmuir_pupaim(.)) %>%
-  mutate(Langmuir_adj_r2 = result$Langmuir_adj_r2) %>%
-  select(-result)
-
-# Apply the Temkin function to each group
-adjusted_r2_temkin_df <- ALL_Biochars_Qsd_25_Q_3 %>%
-  group_by(Type_ox) %>%
-  do(result = fit_Temkin_pupaim(.)) %>%
-  mutate(Temkin_adj_r2 = result$Temkin_adj_r2) %>%
-  select(-result)
 
 # Apply the Freundlich function to each group
 adjusted_r2_freundlich_df <- ALL_Biochars_Qsd_25_Q_3 %>%
   group_by(Type_ox) %>%
   do(result = fit_freundlich_pupaim(.)) %>%
-  mutate(Freundlich_adj_r2 = result$Freundlich_adj_r2) %>%
+  mutate(Freundlich_adj_r2 = result$Freundlich_adj_r2, Freundlich_plot = list(result$Freundlich_plot)) %>%
   select(-result)
+
+# Print the adjusted R-squared values
+print(adjusted_r2_freundlich_df)
+
+# To display the plots for each group, you can use the following:
+plots <- adjusted_r2_freundlich_df$Freundlich_plot
+for (plot in plots) {
+  print(plot)
+}
+
+```
+
+### Manual Langmuir for Dose
+
+```{r}
+
+# Building the Langmuir isotherm nonlinear form
+langmuiranalysis <- function(Ce, Qe) {
+  x <- Ce
+  y <- Qe
+  data <- data.frame(x, y)
+
+  # Langmuir isotherm nonlinear equation
+  fit1 <- y ~ (Qmax * Kl * x) / (1 + (Kl * x))
+
+  # Setting of starting values
+  N <- nrow(na.omit(data))
+  start1 <- data.frame(Qmax = seq(0.1, 30, length.out = 10),
+                       Kl = seq(0.001, 0.1, length.out = 10))
+
+  # Fitting of the Langmuir isotherm via nls2
+  suppressWarnings(fit2 <- nls2::nls2(fit1, start = start1, data = data,
+                                      control = nls.control(maxiter = 50, warnOnly = TRUE),
+                                      algorithm = "port"))
+
+  print("Langmuir Isotherm Nonlinear Analysis")
+  print(summary(fit2))
+
+  print("Akaike Information Criterion")
+  print(AIC(fit2))
+
+  print("Bayesian Information Criterion")
+  print(BIC(fit2))
+
+  # Error analysis of the Langmuir isotherm model
+  errors <- function(y) {
+    rmse <- Metrics::rmse(y, predict(fit2))
+    mae <- Metrics::mae(y, predict(fit2))
+    mse <- Metrics::mse(y, predict(fit2))
+    rae <- Metrics::rae(y, predict(fit2))
+    SE <- sqrt((sum(y - predict(fit2))^2) / (N - 2))
+    list("Root Mean Squared Error" = rmse,
+         "Mean Absolute Error" = mae,
+         "Mean Squared Error" = mse,
+         "Relative Absolute Error" = rae,
+         "Standard Error for the Regression S" = SE)
+  }
+  a <- errors(y)
+  print(a)
+
+  rsqq <- lm(Qe ~ predict(fit2))
+  rsq_summary <- summary(rsqq)
+  print(rsq_summary)
+
+  adj_r_squared <- rsq_summary$adj.r.squared
+  print(paste("Adjusted R-squared: ", adj_r_squared))
+
+  # Graphical representation of the Langmuir isotherm model
+  ### Predicted parameter values
+  parslang <- as.vector(coefficients(fit2))
+  pars_Kl <- parslang[2L]
+  pars_Qmax <- parslang[1L]
+
+  rhs <- function(x) {((pars_Qmax * pars_Kl * x) / (1 + (pars_Kl * x)))}
+
+  #### Plot details
+  ggplot2::theme_set(ggplot2::theme_bw(10))
+  plot <- ggplot2::ggplot(data, ggplot2::aes(x = x, y = y)) +
+    ggplot2::geom_point(color = "#3498DB") +
+    ggplot2::geom_function(color = "#D35400", fun = rhs) +
+    ggplot2::labs(x = "Ce",
+                  y = "Qe",
+                  title = "Langmuir Isotherm Nonlinear Model",
+                  caption = "PUPAIM") +
+    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
+
+  return(list(adj_r_squared = adj_r_squared, plot = plot))
+}
+
+fit_langmuir_pupaim <- function(df) {
+  # Prepare data for PUPAIM
+  C <- c(0, df$Ammonium_moles_eq_avg)
+  Q <- c(0, df$Q_NH4_avg)
+  
+  # Capture the output of langmuiranalysis
+  result <- langmuiranalysis(C, Q)
+  
+  # Return a named list
+  return(list(Langmuir_adj_r2 = result$adj_r_squared, Langmuir_plot = result$plot))
+}
+
+# Apply the Langmuir function to each group
+adjusted_r2_langmuir_df <- ALL_Biochars_Qsd_25_Q_3 %>%
+  group_by(Type_ox) %>%
+  do(result = fit_langmuir_pupaim(.)) %>%
+  mutate(Langmuir_adj_r2 = result$Langmuir_adj_r2, Langmuir_plot = list(result$Langmuir_plot)) %>%
+  select(-result)
+
+# Print the adjusted R-squared values
+print(adjusted_r2_langmuir_df)
+
+# To display the plots for each group, you can use the following:
+plots <- adjusted_r2_langmuir_df$Langmuir_plot
+for (plot in plots) {
+  print(plot)
+}
+
+```
+
+### Manual Tempkin for Dose
+
+```{r}
+
+# Building the Temkin isotherm nonlinear form
+temkinanalysis <- function(Ce, Qe, Temp){
+  x <- Ce
+  y <- Qe
+  t <- Temp
+  R <- 8.314
+  data <- data.frame(x, y)
+
+  # Temkin isotherm nonlinear equation
+  fit1 <- y ~ ((R * t) / bT) * log(AT * x)
+
+  # Setting of starting values
+  start1 <- list(AT = 0.1, bT = 0.1)  # Adjusted starting values
+
+  # Fitting of the Temkin isotherm via nls
+  fit2 <- nls(fit1, start = start1, data = data,
+              control = nls.control(maxiter = 300, warnOnly = TRUE))
+
+  print("Temkin Isotherm Nonlinear Analysis")
+  print(summary(fit2))
+
+  print("Akaike Information Criterion")
+  print(AIC(fit2))
+
+  BIC <- BIC(fit2)
+  print("Bayesian Information Criterion")
+  print(BIC)
+
+  # Error analysis of the Temkin isotherm model
+  errors <- function(y) {
+    rmse <- Metrics::rmse(y, predict(fit2))
+    mae <- Metrics::mae(y, predict(fit2))
+    mse <- Metrics::mse(y, predict(fit2))
+    rae <- Metrics::rae(y, predict(fit2))
+    N <- nrow(na.omit(data))
+    SE <- sqrt((sum(y - predict(fit2))^2) / (N - 2))
+    list("Root Mean Squared Error" = rmse,
+         "Mean Absolute Error" = mae,
+         "Mean Squared Error" = mse,
+         "Relative Absolute Error" = rae,
+         "Standard Error for the Regression S" = SE)
+  }
+  a <- errors(y)
+  print(a)
+  
+  rsqq <- lm(Qe ~ predict(fit2))
+  rsq_summary <- summary(rsqq)
+  print(rsq_summary)
+
+  adj_r_squared <- rsq_summary$adj.r.squared
+  print(paste("Adjusted R-squared: ", adj_r_squared))
+
+  # Graphical representation of the Temkin isotherm model
+  ### Predicted parameter values
+  parstem <- as.vector(coefficients(fit2))
+  pars_AT <- parstem[1L]
+  pars_bT <- parstem[2L]
+
+  rhs <- function(x){(((R * t) / pars_bT) * log(pars_AT * x))}
+
+  #### Plot details
+  ggplot2::theme_set(ggplot2::theme_bw(10))
+  plot <- ggplot2::ggplot(data, ggplot2::aes(x = x, y = y)) +
+    ggplot2::geom_point(color = "#3498DB") +
+    ggplot2::geom_function(color = "#D35400", fun = rhs) +
+    ggplot2::labs(x = "Ce",
+                  y = "Qe",
+                  title = "Temkin Isotherm Nonlinear Model",
+                  caption = "PUPAIM") +
+    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
+
+  return(list(adj_r_squared = adj_r_squared, plot = plot))
+}
+
+# Function to extract adjusted R-squared values for Temkin
+fit_Temkin_pupaim <- function(df) {
+  C <- c(0.001,df$Ammonium_moles_eq_avg)
+  Q <- c(0.001,df$Q_NH4_avg)
+  T <- 298 # K
+  
+  # Capture the output of temkinanalysis
+  result <- temkinanalysis(C, Q, T)
+  
+  # Return a named list
+  return(list(Temkin_adj_r2 = result$adj_r_squared, Temkin_plot = result$plot))
+}
+
+# Apply the Temkin function to each group
+adjusted_r2_temkin_df <- ALL_Biochars_Qsd_25_Q_3 %>%
+  group_by(Type_ox) %>%
+  do(result = fit_Temkin_pupaim(.)) %>%
+  mutate(Temkin_adj_r2 = result$Temkin_adj_r2, Temkin_plot = list(result$Temkin_plot)) %>%
+  select(-result)
+
+# Print the adjusted R-squared values
+print(adjusted_r2_temkin_df)
+
+# To display the plots for each group, you can use the following:
+plots <- adjusted_r2_temkin_df$Temkin_plot
+for (plot in plots) {
+  print(plot)
+}
+
+```
+
+### Manual DR for Dose
+
+```{r}
+
+# Dubinin-Radushkevich isotherm analysis function
+dubininradushkevichanalysis <- function(Ce, Qe, Temp){
+  x <- Ce
+  y <- Qe
+  R <- 8.314
+  t <- Temp
+  epsilon <- R * t * log(1 + (1 / x))
+  data <- data.frame(x, y)
+
+  ### Dubinin-Radushkevich isotherm nonlinear equation
+  fit1 <- y ~ qs * exp(-K * (epsilon^2))
+
+  ### Setting of starting values
+  start1 <- list(qs = 1, K = 1e-8)
+
+  ### Fitting of the Dubinin-Radushkevich isotherm via nls
+  fit2 <- nls(fit1, start = start1, data = data,
+              control = nls.control(maxiter = 300, warnOnly = TRUE))
+
+  print("Dubinin-Radushkevich Isotherm Nonlinear Analysis")
+  print(summary(fit2))
+
+  print("Akaike Information Criterion")
+  print(AIC(fit2))
+
+  print("Bayesian Information Criterion")
+  BIC <- BIC(fit2)
+  print(BIC)
+
+  # Error analysis of the Dubinin-Radushkevich isotherm model
+  errors <- function(y) {
+    rmse <- Metrics::rmse(y, predict(fit2))
+    mae <- Metrics::mae(y, predict(fit2))
+    mse <- Metrics::mse(y, predict(fit2))
+    rae <- Metrics::rae(y, predict(fit2))
+    N <- nrow(na.omit(data))
+    SE <- sqrt((sum(y - predict(fit2))^2) / (N - 2))
+    list("Root Mean Squared Error" = rmse,
+         "Mean Absolute Error" = mae,
+         "Mean Squared Error" = mse,
+         "Relative Absolute Error" = rae,
+         "Standard Error for the Regression S" = SE)
+  }
+  a <- errors(y)
+  print(a)
+
+  rsqq <- lm(Qe ~ predict(fit2))
+  rsq_summary <- summary(rsqq)
+  print(rsq_summary)
+
+  adj_r_squared <- rsq_summary$adj.r.squared
+  print(paste("Adjusted R-squared: ", adj_r_squared))
+
+  # Graphical representation of the Dubinin-Radushkevich isotherm model
+  ### Predicted parameter values
+  parsdubR <- as.vector(coefficients(fit2))
+  pars_qs <- parsdubR[1L]
+  pars_K <- parsdubR[2L]
+
+  rhs <- function(x) {pars_qs * exp(-pars_K * (R * t * log(1 + (1 / x)))^2)}
+
+  #### Plot details
+  ggplot2::theme_set(ggplot2::theme_bw(10))
+  plot <- ggplot2::ggplot(data, ggplot2::aes(x = x, y = y)) +
+    ggplot2::geom_point(color = "#3498DB") +
+    ggplot2::geom_function(color = "#D35400", fun = rhs) +
+    ggplot2::labs(x = "Ce",
+                  y = "Qe",
+                  title = "Dubinin-Radushkevich Isotherm Nonlinear Model",
+                  caption = "PUPAIM") +
+    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5))
+
+  return(list(adj_r_squared = adj_r_squared, plot = plot))
+}
+# Function to extract adjusted R-squared values for DR
+fit_DR_pupaim <- function(df) {
+  C <- c(1, df$Ammonium_moles_eq_avg)
+  Q <- c(0, df$Q_NH4_avg)
+  T <- 298 # K
+  
+  # Capture the output of Dubinin-Radushkevich isotherm analysis
+  result <- dubininradushkevichanalysis(C, Q, T)
+  
+  # Return as data frame
+  data.frame(Type_ox = unique(df$Type_ox), DR_adj_r2 = result$adj_r_squared, DR_plot = I(list(result$plot)))
+}
 
 # Apply the DR function to each group and combine the results
 adjusted_r2_DR_df <- ALL_Biochars_Qsd_25_Q_3 %>%
@@ -3627,27 +4756,571 @@ adjusted_r2_DR_df <- ALL_Biochars_Qsd_25_Q_3 %>%
   do(fit_DR_pupaim(.)) %>%
   ungroup()
 
+# Display the plots for each group
+plots <- adjusted_r2_DR_df$DR_plot
+for (plot in plots) {
+  print(plot)
+}
+
+```
+
+### Manual Elovich for Dose
+
+```{r}
+
+# Building the Elovich isotherm nonlinear form
+elovichanalysis <- function(Ce, Qe){
+  x <- Qe
+  y <- Ce
+  data <- data.frame(x, y)
+
+  # Elovich isotherm nonlinear equation
+  fit1 <- y ~ x / (QmE * KE * exp(-x / QmE))
+
+  # Setting of starting values with reasonable ranges
+  start1 <- data.frame(KE = seq(0.1, 10, length.out = 10), QmE = seq(0.1, 10, length.out = 10))
+
+  # Fitting of Elovich isotherm via nls2
+  fit2 <- nls2::nls2(fit1, start = start1, data = data,
+                     control = nls.control(maxiter = 100, warnOnly = TRUE),
+                     algorithm = "port")
+
+  print("Elovich Isotherm Nonlinear Analysis")
+  print(summary(fit2))
+
+  print("Akaike Information Criterion")
+  print(AIC(fit2))
+
+  print("Bayesian Information Criterion")
+  BIC <- BIC(fit2)
+  print(BIC)
+
+  # Error analysis of the Elovich isotherm model
+  errors <- function(y) {
+    rmse <- Metrics::rmse(y, predict(fit2))
+    mae <- Metrics::mae(y, predict(fit2))
+    mse <- Metrics::mse(y, predict(fit2))
+    rae <- Metrics::rae(y, predict(fit2))
+    N <- nrow(na.omit(data))
+    SE <- sqrt((sum(y - predict(fit2))^2) / (N - 2))
+    list("Root Mean Squared Error" = rmse,
+         "Mean Absolute Error" = mae,
+         "Mean Squared Error" = mse,
+         "Relative Absolute Error" = rae,
+         "Standard Error for the Regression S" = SE)
+  }
+  a <- errors(y)
+  print(a)
+
+  rsqq <- lm(Qe ~ predict(fit2))
+  rsq_summary <- summary(rsqq)
+  print(rsq_summary)
+
+  adj_r_squared <- rsq_summary$adj.r.squared
+  print(paste("Adjusted R-squared: ", adj_r_squared))
+
+  # Graphical representation of the Elovich isotherm model
+  ### Predicted parameter values
+  parsElovich <- as.vector(coefficients(fit2))
+  pars_KE <- parsElovich[1L]
+  pars_QmE <- parsElovich[2L]
+
+  rhs <- function(x){x / (pars_QmE * pars_KE * exp(-x / pars_QmE))}
+
+  #### Plot details
+  ggplot2::theme_set(ggplot2::theme_bw(10))
+  plot <- ggplot2::ggplot(data, ggplot2::aes(x = x, y = y)) +
+    ggplot2::geom_point(color = "#3498DB") +
+    ggplot2::geom_function(color = "#D35400", fun = rhs) +
+    ggplot2::labs(x = "Qe",
+                  y = "Ce",
+                  title = "Elovich Isotherm Nonlinear Model",
+                  caption = "PUPAIM") +
+    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5)) +
+    ggplot2::coord_flip()
+
+  return(list(adj_r_squared = adj_r_squared, plot = plot))
+}
+
+# Function to extract adjusted R-squared values for Elovich
+fit_elovich_pupaim <- function(df) {
+  C <- c(0.001, df$Ammonium_moles_eq_avg)
+  Q <- c(0.001, df$Q_NH4_avg)
+  
+  # Capture the output of elovichanalysis
+  result <- elovichanalysis(C, Q)
+  
+  # Return a named list
+  return(list(Elovich_adj_r2 = result$adj_r_squared, Elovich_plot = result$plot))
+}
+
 # Apply the Elovich function to each group
 adjusted_r2_elovich_df <- ALL_Biochars_Qsd_25_Q_3 %>%
   group_by(Type_ox) %>%
-  do(fit_elovich_pupaim(.)) %>%
-  ungroup()
+  do(result = fit_elovich_pupaim(.)) %>%
+  mutate(Elovich_adj_r2 = result$Elovich_adj_r2, Elovich_plot = list(result$Elovich_plot)) %>%
+  select(-result)
 
-# # Apply the BET function to each group
-# adjusted_r2_bet_df <- ALL_Biochars_Qsd_25_Q_3 %>%
-#   group_by(Type_ox) %>%
-#   do(fit_bet_pupaim(.)) %>%
-#   ungroup()
+# Print the adjusted R-squared values
+print(adjusted_r2_elovich_df)
 
-# Combine the data frames
-adjusted_r2_combined <- adjusted_r2_temkin_df %>%
+# To display the plots for each group, you can use the following:
+plots <- adjusted_r2_elovich_df$Elovich_plot
+for (plot in plots) {
+  print(plot)
+}
+
+```
+
+### Combining R2
+
+```{r}
+
+adjusted_r2_combined_w_0 <- adjusted_r2_temkin_df %>%
   left_join(adjusted_r2_freundlich_df, by = "Type_ox") %>%
   left_join(adjusted_r2_langmuir_df, by = "Type_ox") %>%
   left_join(adjusted_r2_DR_df, by = "Type_ox") %>%
   left_join(adjusted_r2_elovich_df, by = "Type_ox")
 
-# Print the combined data frame
-adjusted_r2_combined
+adjusted_r2_combined_w_0  <- adjusted_r2_combined_w_0 %>%
+  select(-contains("plot"))
+
+write_csv(adjusted_r2_combined_w_0, "adj_r2_dose.csv")
+
+summary(adjusted_r2_combined_w_0)
+```
+
+###  Freundlich Dose w/ 0
+
+```{r}
+
+
+# Building the Freundlich isotherm nonlinear form
+freundlichanalysis <- function(Ce, Qe){
+  x <- Ce
+  y <- Qe
+  data <- data.frame(x, y)
+
+  # Freundlich isotherm nonlinear equation
+  fit1 <- y ~ (KF * (x^(1 / n)))
+
+  # Setting of starting values
+  start1 <- data.frame(KF = c(0.001, 10), n = c(0.001, 10))
+
+  # Fitting of Freundlich isotherm via nls2
+  fit2 <- nls2::nls2(fit1, start = start1, data = data,
+                     control = nls.control(maxiter = 45, warnOnly = TRUE),
+                     algorithm = "port")
+
+  print("Freundlich Isotherm Analysis")
+  print(summary(fit2))
+
+  print("Akaike Information Criterion")
+  print(AIC(fit2))
+
+  print("Bayesian Information Criterion")
+  BIC <- BIC(fit2)
+  print(BIC)
+
+  # Extract parameters from the fitted model
+  parsFreundlich <- as.vector(coefficients(fit2))
+  pars_KF <- parsFreundlich[1L]
+  pars_n <- parsFreundlich[2L]
+
+  # Calculate Q at C = 300 using the Freundlich equation: Q = Kf * C^(1/n)
+  C_target <- 300
+  Q_300 <- pars_KF * C_target^(1 / pars_n)
+
+  return(list(Q_300 = Q_300))
+}
+
+# Function to extract Q at C = 300 for Freundlich
+fit_freundlich_pupaim <- function(df) {
+  C <- c(0.001, df$Ammonium_moles_eq_avg)
+  Q <- c(0.001, df$Q_NH4_avg)
+  
+  # Capture the output of freundlichanalysis
+  result <- freundlichanalysis(C, Q)
+  
+  # Return a named list
+  return(list(Q_300 = result$Q_300))
+}
+
+# Apply the Freundlich function to each group
+Freund_w_0 <- ALL_Biochars_Qsd_25_Q_3 %>%
+  group_by(Type_ox) %>%
+  do(result = fit_freundlich_pupaim(.)) %>%
+  mutate(Q_300 = result$Q_300) %>%
+  select(-result)
+
+# Merge the Q_300 values into the existing dataframe
+Freund_w_0_df <- Freund_w_0 %>%
+  left_join(ALL_Biochars_Qsd_25_Q_3, by = "Type_ox")
+
+```
+
+### \*\*Q-Plot Freundlich Q \< 3, Qsd \<25%, No AL - OC_XPS 
+
+```{r}
+Freund_w_0_df <- Freund_w_0_df %>%
+  distinct(Type_ox, .keep_all = TRUE)
+```
+
+```{r}
+
+# Filter out missing or non-finite values
+Freund_w_0_df_No_AL <- Freund_w_0_df %>% 
+  filter(Type != "AL" & !is.na(XPS_OC) & !is.na(Q_300))
+```
+
+###  \*\* Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL
+
+```{r, warning=FALSE}
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(Freund_w_0_df_No_AL, aes(x = OC, y = Q_300, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_300 ~ OC, data = Freund_w_0_df_No_AL)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(OC), y = max(Q_300), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+```
+
+### 
+
+```{r, warning=FALSE}
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(Freund_w_0_df_No_AL, aes(x = XPS_OC, y = Q_300, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("OC Surface") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_300 ~ XPS_OC, data = Freund_w_0_df_No_AL)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(XPS_OC), y = max(Q_300), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+```
+
+### \*\*Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL Net App Diff
+
+```{r, warning=FALSE}
+
+Qmax_Plot <- ggplot(Freund_w_0_df_No_AL, aes(x = net_app_H_diff_avg_abs, y = Q_300, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("Net Apparent Proton Charge Difference") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_300 ~ net_app_H_diff_avg_abs, data = Freund_w_0_df_No_AL)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(net_app_H_diff_avg_abs), y = max(Q_300), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+```
+
+### \*\*\*Dose Q-Plot Freundlich Q \< 3, Qsd \<25% No AL - Carb only no outlier
+
+```{r}
+
+Freund_w_0_df_No_AL_Carb <- Freund_w_0_df_No_AL %>%
+  filter (Carb_pi_Ksp <= 0.24)
+
+```
+
+```{r, warning=FALSE}
+
+# Create the plot with unique data
+Qmax_Plot <- ggplot(Freund_w_0_df_No_AL_Carb, aes(x = Carb, y = Q_300, color = Type, fill = Type)) +
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  xlab("C=O)-O") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.position = c(0.1, 0.8),
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  )
+
+# Fit the linear regression model to the unique data
+lm_model <- lm(Q_300 ~ Carb, data = Freund_w_0_df_No_AL_Carb)
+
+# Summary of the regression model
+summary_lm <- summary(lm_model)
+
+# Calculate R-squared value and regression details
+r_squared <- summary_lm$r.squared
+p_value <- summary_lm$coefficients[2, 4]  # Extracting the p-value for the slope
+equation <- paste("Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC")
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract the F-statistic and degrees of freedom
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+
+# Extract the standard deviation of residuals (example of what S25 could represent)
+residual_sd <- sd(summary_lm$residuals)
+
+# Output the regression details
+cat("Equation: Q_max =", round(coef(lm_model)[1], 2), "+", round(coef(lm_model)[2], 2), "* OC\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
+
+# Add R-squared value to the plot
+Qmax_Plot <- Qmax_Plot +
+  geom_text(aes(x = max(Carb), y = max(Q_300), label = paste("R^2 =", round(r_squared, 2))),
+            hjust = 1, vjust = 5, color = "black", size = 6)
+
+# Display the plot
+print(Qmax_Plot)
+
+```
+
+###  \*\*\* Freundlich Dose Plot 
+
+```{r}
+
+# Building the Freundlich isotherm nonlinear form
+freundlichanalysis <- function(Ce, Qe){
+  x <- Ce
+  y <- Qe
+  data <- data.frame(x, y)
+
+  # Freundlich isotherm nonlinear equation
+  fit1 <- y ~ (KF * (x^(1/n)))
+
+  # Setting of starting values
+  start1 <- data.frame(KF = c(0.001, 10), n = c(0.001, 10))
+
+  # Fitting of Freundlich isotherm via nls2
+  fit2 <- nls2::nls2(fit1, start = start1, data = data,
+                     control = nls.control(maxiter = 45, warnOnly = TRUE),
+                     algorithm = "port")
+
+  print("Freundlich Isotherm Analysis")
+  print(summary(fit2))
+
+  print("Akaike Information Criterion")
+  print(AIC(fit2))
+
+  print("Bayesian Information Criterion")
+  BIC <- BIC(fit2)
+  print(BIC)
+
+  # Extract fitted values from the model
+  fitted_values <- predict(fit2, newdata = data)
+
+  # Extract parameters from the fitted model
+  parsFreundlich <- as.vector(coefficients(fit2))
+  pars_KF <- parsFreundlich[1L]
+  pars_n <- parsFreundlich[2L]
+
+  # Calculate Q at C = 300 using the Freundlich equation: Q = Kf * C^(1/n)
+  C_target <- 300
+  Q_300 <- pars_KF * C_target^(1 / pars_n)
+
+  return(list(Q_300 = Q_300, fitted_values = fitted_values))
+}
+
+# Function to extract fitted values for Freundlich
+fit_freundlich_pupaim <- function(df) {
+  C <- c(0.001, df$Ammonium_moles_eq_avg)
+  Q <- c(0.001, df$Q_NH4_avg)
+  
+  # Capture the output of freundlichanalysis
+  result <- freundlichanalysis(C, Q)
+  
+  # Remove the first element to match the length of the original data
+  df$fitted_values <- result$fitted_values[-1]
+  
+  # Return the dataframe with fitted values
+  return(df)
+}
+
+# Apply the Freundlich function to each group and add fitted values
+ALL_Biochars_Qsd_25_Q_3_freund_fit <- ALL_Biochars_Qsd_25_Q_3 %>%
+  group_by(Type_ox) %>%
+  group_modify(~ fit_freundlich_pupaim(.))
+
+# Plot the data with fitted values
+Q_Conc_Dose_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_freund_fit, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, color = OC, border = OC, fill = OC, na.rm = TRUE)) +
+  geom_point(shape = 24, size = 6, stroke = 2, color = "black") +
+  geom_errorbarh(aes(xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd)) +
+  geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
+  geom_line(aes(y = fitted_values, group = Type_ox), size = 1.2, linetype = "solid") + # Add  isotherm line for each sample
+  facet_wrap(~ Type_ox, scales = "fixed") +
+  xlab("Equilibrium Concentration (mM)") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Times"),
+    legend.direction = "horizontal",
+    legend.key.width = unit(0.8, "cm"),  # Make legend wider
+    legend.key.height = unit(0.2, "cm"),  # Make legend thinner
+    legend.position = c(0.9, -0.1),
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+  scale_fill_gradient(low = "purple", high = "yellow") +
+  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend()) +
+  guides(color = "none")
+
+# Print the updated plot
+print(Q_Conc_Dose_Plot)
+
+
 
 ```
 
