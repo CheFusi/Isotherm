@@ -808,6 +808,124 @@ for (name in names(combined_dfs)) {
 }
 ```
 
+## Add Type_ox Column
+
+```{r}
+
+# Adding Type_ox column based on the name of each df in the list
+for (name in names(combined_dfs)) {
+  combined_dfs[[name]]$Type_ox <- name
+}
+```
+
+## Activities: Combining All concentration triplicates into One Large Data Frame
+
+##Combining Anions and Cations into One Dataframe for PHREEQC
+
+-   all the molar concentration of the ions, in triplicate, combined into one dataframe
+
+-   saving the dataframe as an excel file that can be imported into PHREEQC to calculate equilibrium activity.
+
+```{r}
+
+# Replace the Type_ox for the additional samples (K-O) with the appropriate label "AK_31" with "AK_30" in the Type_Ox column
+combined_dfs$AK_31$Type_ox <- gsub("AK_31", "AK_30", combined_dfs$AK_31$Type_ox)
+
+combined_dfs$AK_06$Type_ox <- gsub("AK_06", "AK_05", combined_dfs$AK_06$Type_ox)
+
+combined_dfs$AK_11$Type_ox <- gsub("AK_11", "AK_10", combined_dfs$AK_11$Type_ox)
+
+combined_dfs$AM_16$Type_ox <- gsub("AM_16", "AM_15", combined_dfs$AM_16$Type_ox)
+#
+Dilution_trip <- do.call(rbind, combined_dfs)
+
+Dilution_trip_2 <- Dilution_trip %>% 
+   filter(!(Type_ox == "AK_30" & ID %in% c("15","16", "17", "18", "19", "20")) &
+          !(Type_ox %in% c("AK_05") & ID %in% c("13","14", "15", "16", "17", "18", "19", "20")) &
+          !(Type_ox %in% c("AK_10", "AM_15") & ID %in% c("12","13","14", "15", "16", "17", "18", "19", "20")) &
+          !(Type_ox %in% c("AM_05") & ID %in% c("9","10")) &
+          !(Type_ox %in% c( "AM_10") & ID %in% c("9","10")) )
+
+```
+
+```{r}
+#----------------------------------------------------------------------
+Phreeqc_num<-data.frame(seq(1,nrow(Dilution_trip_2)))
+colnames(Phreeqc_num)<-("Number")
+
+Dilution_Phreeq_1 <- Dilution_trip_2 %>% select("Type_ox","ID","Rep", "Sodium_moles_eq","Ammonium_moles_eq","Potassium_moles_eq","Magnesium_moles_eq","Acetate_moles_eq","Chloride_moles_eq","Phosphate_moles_eq","Sulfate_moles_eq","Carbonate_moles_eq","pH_eq")
+
+## replace n.a. with a very small value 
+
+Dilution_Phreeq_1 <- Dilution_Phreeq_1 %>%
+  mutate(across(everything(), ~ ifelse(. == 'NaN', 0.5, .)))
+
+Dilution_Phreeq <- data.frame(cbind(Phreeqc_num[,],Dilution_Phreeq_1))
+
+colnames(Dilution_Phreeq)<-as.character(c("Number",'Type_ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate', "pH"))
+
+
+Dilution_for_PHREEQC<-data.frame(Dilution_Phreeq[,c(1,5:14)])
+
+colnames(Dilution_for_PHREEQC) = c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
+
+write.table(Dilution_for_PHREEQC,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/Dilution_for_PHREEQC.txt", sep = "\t",
+            row.names = FALSE, col.names = FALSE)
+#----------------------------------------------------------------------
+```
+
+```{r}
+
+Dilution_trip_low <- Dilution_trip %>% 
+   filter(#(Type_ox == "AK_30" & ID %in% c("15")) |
+          #(Type_ox %in% c("AK_05") & ID %in% c("13")) |
+          #(Type_ox %in% c("AK_10", "AM_15") & ID %in% c("12","13")) |
+          (Type_ox %in% c("AM_05") & ID %in% c("9","10")) |
+          (Type_ox %in% c( "AM_10") & ID %in% c("9","10"))) 
+
+Phreeqc_num_low<-data.frame(seq(1,nrow(Dilution_trip_low)))
+colnames(Phreeqc_num)<-("Number")
+
+Dilution_Phreeq_low_1 <- Dilution_trip_low %>% select("Type_ox","ID","Rep", "Sodium_moles_eq","Ammonium_moles_eq","Potassium_moles_eq","Magnesium_moles_eq","Acetate_moles_eq","Chloride_moles_eq","Phosphate_moles_eq","Sulfate_moles_eq","Carbonate_moles_eq","pH_eq")
+
+## replace n.a. with a very small value 
+
+Dilution_Phreeq_low_1 <- Dilution_Phreeq_low_1 %>%
+  mutate(across(everything(), ~ ifelse(. == 'NaN', 0.5, .))) %>%
+  mutate(across(where(is.numeric), ~ replace_na(., 0.5)))
+
+
+Dilution_Phreeq_low <- data.frame(cbind(Phreeqc_num_low[,],Dilution_Phreeq_low_1))
+
+colnames(Dilution_Phreeq_low)<-as.character(c("Number",'Type_ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate', "pH"))
+
+
+Dilution_for_PHREEQC_low<-data.frame(Dilution_Phreeq_low[,c(1,5:14)])
+
+colnames(Dilution_for_PHREEQC_low) = c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
+
+Dilution_for_PHREEQC_low <- Dilution_for_PHREEQC_low %>% select(-c("Mg","S(6)"))
+
+write.table(Dilution_for_PHREEQC_low,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/Dilution_for_PHREEQC_low.txt", sep = "\t",
+            row.names = FALSE, col.names = FALSE)
+#----------------------------------------------------------------------
+```
+
+##PHREEQC
+
+## Activities
+
+```{r}
+
+Dilution_Act <- read.table("/Users/soliverchefusi/Dilution_Activity.out", header = TRUE)
+
+Dilution_trip_2$mu <-Dilution_Act$mu
+Dilution_trip_2$NH4_Act <-1000*(10^Dilution_Act$la_NH4.)
+
+
+#Dilution_trip_3<- merge(Dilution_All, Dilution_trip_2, by = c("ID","Type_ox"), all.x = TRUE)
+```
+
 ## Statistics: Mean and Standard Deviation of Replicates
 
 ```{r}
@@ -879,11 +997,27 @@ for (df_name in names(averaged_dfs)) {
 }
 ```
 
+### Combine Additional Experiments
+
+```{r}
+Dilution_Isotherm_All <- averaged_dfs
+
+# Replace the Type_ox for the additional samples (K-O) with the appropriate label "AK_31" with "AK_30" in the Type_Ox column
+Dilution_Isotherm_All$AK_31$Type_ox <- gsub("AK_31", "AK_30", Dilution_Isotherm_All$AK_31$Type_ox)
+
+Dilution_Isotherm_All$AK_06$Type_ox <- gsub("AK_06", "AK_05", Dilution_Isotherm_All$AK_06$Type_ox)
+
+Dilution_Isotherm_All$AK_11$Type_ox <- gsub("AK_11", "AK_10", Dilution_Isotherm_All$AK_11$Type_ox)
+
+Dilution_Isotherm_All$AM_16$Type_ox <- gsub("AM_16", "AM_15", Dilution_Isotherm_All$AM_16$Type_ox)
+
+```
+
 ### Save
 
 ```{r}
 
-saveRDS(averaged_dfs, "Dilution_Isotherms_All.RDS")
+saveRDS(Dilution_Isotherm_All, "Dilution_Isotherms_All.RDS")
 ```
 
 ### Read in Dataframe
@@ -1025,53 +1159,11 @@ plot(Ceq_dataframe$AK_15_Ceq,averaged_dfs[[1]]$Ammonium_moles_eq_avg)
 abline(a = 0, b = 1, col = "red")
 ```
 
-## Stopped editing here
-
-## Combining All concentration triplicates into One Large Data Frame
-
-##Combining Anions and Cations into One Dataframe for PHREEQC
-
--   all the molar concentration of the ions, in triplicate, combined into one dataframe
-
--   saving the dataframe as an excel file that can be imported into PHREEQC to calculate equilibrium activity.
+### Plots with Activity
 
 ```{r}
 
-#Combining cations and anions into one dataframe for convenient activity calculations
-
-#----------------------------------------------------------------------
-Phreeqc_num<-data.frame(seq(1,nrow(Cations_all_mol)))
-colnames(Phreeqc_num)<-("Number")
-
-int_iso_all <- data.frame(rbind(Cations_all_mol[,]),
-                           Anions_all_mol[,-c(1:3)],
-                           pH[,4])
-int_iso_all<-data.frame(cbind(Phreeqc_num[,],int_iso_all))
-colnames(int_iso_all)<-as.character(c("PHREEQC_number",'Ox','ID','Rep','Sodium','Ammonium','Potassium','Magnesium','Acetate','Chloride','Phosphate', 'Sulfate', 'Carbonate', "pH"))
-
-
-int_iso_all_for_PHREEQC<-data.frame(int_iso_all[,c(1,5:14)])
-
-colnames(int_iso_all_for_PHREEQC) = c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
-
-write.table(int_iso_all_for_PHREEQC,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/int_iso_all_for_PHREEQC.txt", sep = "\t",
-            row.names = FALSE, col.names = FALSE)
-#----------------------------------------------------------------------
-```
-
-##PHREEQC
-
-## Activities
-
-```{r}
-
-int_iso_Act_Ion_str<- data.frame((FullSheet$"Act"[c(1:51),c(4:7)]))
-
-int_iso_Act_Ion_str[,c(2:4)]<-1000*(10^(int_iso_Act_Ion_str[,c(2:4)]))
-colnames(int_iso_Act_Ion_str)<-as.character(c("Ionic_str","Act_NH4","Act_Na","Act_K"))
-
-
-df_All<- data.frame(cbind(int_iso_Act_Ion_str, int_iso_all))
+saveRDS(Dilution_All_3, "Dilution_Isotherms_All_Act.RDS")
 ```
 
 ## Nov 2023 Edits
