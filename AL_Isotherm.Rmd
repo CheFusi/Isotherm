@@ -719,7 +719,14 @@ Q_function<-function(df,Q,C_In,C_eq,volume,m_s) {
   }
 
 
-AL_5_All$Q_NH4<-Q_function(AL_5_All,"Q_NH4","AL_NH4_In","Ammonium","volume","mass_biochar")
+#AL_5_All$Q_NH4<-Q_function(AL_5_All,"Q_NH4","AL_NH4_In","Ammonium","volume","mass_biochar")
+
+
+### Hestrin Test
+#AL_5_All$Q_NH4<-Q_function(AL_5_All,"Q_NH4","NH4_ctrl","Ammonium","volume","mass_biochar")
+
+## END HESTRIN TEST
+
 
 AL_5_All$Q_Na<-Q_function(AL_5_All,"Q_Na","AL_K_In","Sodium","volume","mass_biochar")
 
@@ -743,6 +750,11 @@ AL_5_All$Q_Ace<-Q_function(AL_5_All,"Q_Ace","AL_Ace_In","Acetate","volume","mass
 #Q<-function(df, Q_col,C_In,C_eq,volume,m_s) {df$Q_col<-((df$C_In-df$C_eq)*df$volume/df$m_s)}
 
 #Q_function(AL_20_All,AL_20_NH4_In,Ammonium,volume,mass_biochar)
+
+
+
+
+
 ```
 
 ## Average and stdev of Replicates
@@ -949,6 +961,33 @@ AL_5_K_Plot
 AL_All_Avg_sd<-(AL_5_All_Avg_sd)
 
 #plotting
+
+AL_Plot<- ggplot(AL_All_Avg_sd,aes(x=Act_NH4,y=Q_NH4, color = Ox, na.rm=TRUE)) +
+  geom_point(shape=16, size =4)+
+     geom_errorbar(aes(ymin=Q_NH4-Q_NH4_sd, ymax=Q_NH4+Q_NH4_sd))+
+  geom_errorbarh(aes(xmin=Act_NH4-Act_NH4_sd, xmax=Act_NH4+Act_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mmol)")+
+  ylab("Q (mmol NH4/g biochar)")+
+  ggtitle("AL Sorption Isotherm")+
+   theme_classic(base_size=18)+
+  theme(text=element_text(family = "Times"),
+        legend.position='bottom',
+        axis.text.x=element_text(size=16),
+        axis.text.y=element_text(size=16),
+        axis.title.x = element_text(margin = margin(t=20), size=16),
+        axis.title.y = element_text(margin = margin(r=20), size=16),
+        panel.border = element_rect(color="black",
+                                    fill = NA,
+                                    size = 1)) 
+AL_Plot
+
+
+```
+
+Hestrin TEST\
+
+```{r}
 
 AL_Plot<- ggplot(AL_All_Avg_sd,aes(x=Act_NH4,y=Q_NH4, color = Ox, na.rm=TRUE)) +
   geom_point(shape=16, size =4)+

@@ -220,7 +220,7 @@ label_data <- B_Bio_Smoo_Long_ord_4000 %>%
 
 # Create the plot
 # Create the plot with ticks every 100 wavenumbers and reverse the x-axis
-p <- ggplot(data = B_Bio_Smoo_Long_ord_4000, aes(x = variable, y = value + y_offset, group = SSN, color = OC)) +
+p <- ggplot(data = B_Bio_Smoo_Long_ord_4000, aes(x = variable, y = value + y_offset, group = OC,  color = OC)) +
   geom_line(size = 0.5, alpha = 0.9) +
   scale_x_reverse(breaks = seq(0, max(B_Bio_Smoo_Long_ord_4000$variable), by = 200)) + # Ticks every 100 wavenumbers, reverse axis
   xlab(expression("Wavenumbers (cm)"^-1)) +

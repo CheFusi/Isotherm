@@ -840,11 +840,11 @@ combined_dfs$AM_16$Type_ox <- gsub("AM_16", "AM_15", combined_dfs$AM_16$Type_ox)
 Dilution_trip <- do.call(rbind, combined_dfs)
 
 Dilution_trip_2 <- Dilution_trip %>% 
-   filter(!(Type_ox == "AK_30" & ID %in% c("15","16", "17", "18", "19", "20")) &
-          !(Type_ox %in% c("AK_05") & ID %in% c("13","14", "15", "16", "17", "18", "19", "20")) &
-          !(Type_ox %in% c("AK_10", "AM_15") & ID %in% c("12","13","14", "15", "16", "17", "18", "19", "20")) &
-          !(Type_ox %in% c("AM_05") & ID %in% c("9","10")) &
-          !(Type_ox %in% c( "AM_10") & ID %in% c("9","10")) )
+   filter(!(Type_ox == "AK_30" & ID %in% c("16", "17", "18", "19", "20")) &
+          !(Type_ox %in% c("AK_05") & ID %in% c("14", "15", "16", "17", "18", "19", "20")) &
+          !(Type_ox %in% c("AK_10", "AM_15") & ID %in% c("14", "15", "16", "17", "18", "19", "20"))) #&
+          #!(Type_ox %in% c("AM_05") & ID %in% c("9","10")) &
+          #!(Type_ox %in% c( "AM_10") & ID %in% c("9","10")) )
 
 ```
 
@@ -869,17 +869,22 @@ Dilution_for_PHREEQC<-data.frame(Dilution_Phreeq[,c(1,5:14)])
 
 colnames(Dilution_for_PHREEQC) = c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
 
-write.table(Dilution_for_PHREEQC,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/Dilution_for_PHREEQC.txt", sep = "\t",
+
+Dilution_for_PHREEQC <- Dilution_for_PHREEQC %>% select(-c("Mg"))
+
+write.table(Dilution_for_PHREEQC,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/Dilution_for_PHREEQC.txt", sep = "\t", 
             row.names = FALSE, col.names = FALSE)
 #----------------------------------------------------------------------
 ```
 
+Activities for most diluted solutions.
+
 ```{r}
 
 Dilution_trip_low <- Dilution_trip %>% 
-   filter(#(Type_ox == "AK_30" & ID %in% c("15")) |
-          #(Type_ox %in% c("AK_05") & ID %in% c("13")) |
-          #(Type_ox %in% c("AK_10", "AM_15") & ID %in% c("12","13")) |
+   filter((Type_ox == "AK_30" & ID %in% c("11","12","13","14","15")) |
+          (Type_ox %in% c("AK_05") & ID %in% c("11","12","13"))  |
+          (Type_ox %in% c("AK_10", "AM_15") & ID %in% c("11","12","13")) |
           (Type_ox %in% c("AM_05") & ID %in% c("9","10")) |
           (Type_ox %in% c( "AM_10") & ID %in% c("9","10"))) 
 
@@ -904,7 +909,7 @@ Dilution_for_PHREEQC_low<-data.frame(Dilution_Phreeq_low[,c(1,5:14)])
 
 colnames(Dilution_for_PHREEQC_low) = c("Number",'Na','N(-3)','K','Mg','Acetate','Cl','P', 'S(6)', 'C(4)', "pH")
 
-Dilution_for_PHREEQC_low <- Dilution_for_PHREEQC_low %>% select(-c("Mg","S(6)"))
+Dilution_for_PHREEQC_low <- Dilution_for_PHREEQC_low %>% select(-c("Mg"))
 
 write.table(Dilution_for_PHREEQC_low,"/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Sorption/AK_to_AO_Isotherm/Final_Data/Activities/Dilution_for_PHREEQC_low.txt", sep = "\t",
             row.names = FALSE, col.names = FALSE)
@@ -919,11 +924,24 @@ write.table(Dilution_for_PHREEQC_low,"/Users/soliverchefusi/Library/CloudStorage
 
 Dilution_Act <- read.table("/Users/soliverchefusi/Dilution_Activity.out", header = TRUE)
 
+Dilution_Act_low <- read.table("/Users/soliverchefusi/Dilution_Low_Activity.out", header = TRUE)
+
 Dilution_trip_2$mu <-Dilution_Act$mu
 Dilution_trip_2$NH4_Act <-1000*(10^Dilution_Act$la_NH4.)
 
 
 #Dilution_trip_3<- merge(Dilution_All, Dilution_trip_2, by = c("ID","Type_ox"), all.x = TRUE)
+```
+
+Separate back into a list of dfs
+
+```{r}
+
+# Split the dataframe into a list of dataframes based on the Type_ox column
+df_act_list <- split(Dilution_trip_2, Dilution_trip_2$Type_ox)
+
+# Name each dataframe in the list according to the unique values in the Type_ox column
+#names(df_act_list) <- unique(Dilution_trip_2$Type_ox)
 ```
 
 ## Statistics: Mean and Standard Deviation of Replicates
@@ -933,18 +951,18 @@ Dilution_trip_2$NH4_Act <-1000*(10^Dilution_Act$la_NH4.)
 averaged_dfs <- list()
 
 # Iterate over each dataframe in the combined_dfs list
-for (df_index in seq_along(combined_dfs)) {
+for (df_index in seq_along(df_act_list)) {
   # Get the name of the current dataframe
-  df_name <- names(combined_dfs)[df_index]
+  df_name <- names(df_act_list)[df_index]
   
   # Create an empty dataframe to store the results
-  averaged_df <- data.frame(ID = unique(combined_dfs[[df_index]]$ID))  # Assuming Rep is present in the dataframe
+  averaged_df <- data.frame(ID = unique(df_act_list[[df_index]]$ID))  # Assuming Rep is present in the dataframe
   
   # Add a new column "Type_Ox" with the dataframe name as its entries
   averaged_df$Type_ox <- df_name
   
   # Iterate over each column in the current dataframe
-  for (col_name in names(combined_dfs[[df_index]])) {
+  for (col_name in names(df_act_list[[df_index]])) {
     # Skip the Rep ID and OX columns
     if (col_name %in% c("Rep","ID")) {
       next
@@ -955,9 +973,9 @@ for (df_index in seq_along(combined_dfs)) {
     sds <- c()
     
     # Iterate over each group of 3 rows (replicates)
-    for (i in seq(1, nrow(combined_dfs[[df_index]]), by = 3)) {
+    for (i in seq(1, nrow(df_act_list[[df_index]]), by = 3)) {
       # Extract the subset of rows for the current group
-      group <- combined_dfs[[df_index]][i:(i + 2), col_name]
+      group <- df_act_list[[df_index]][i:(i + 2), col_name]
       
       # Calculate mean and standard deviation
       mean_value <- mean(group, na.rm = TRUE)
@@ -995,21 +1013,51 @@ for (df_name in names(averaged_dfs)) {
   averaged_dfs[[df_name]] <- averaged_dfs[[df_name]] %>%
     select(-contains("rep_avg_in_sd"), -contains("rep_avg_ctrl_sd"), -contains("rep_avg_in_avg"), -contains("rep_avg_ctrl_avg"))
 }
+
+Dilution_Isotherm_All <- averaged_dfs
 ```
 
-### Combine Additional Experiments
+### Add 0's to each df (for isotherm fitting, primarily)
 
 ```{r}
-Dilution_Isotherm_All <- averaged_dfs
 
-# Replace the Type_ox for the additional samples (K-O) with the appropriate label "AK_31" with "AK_30" in the Type_Ox column
-Dilution_Isotherm_All$AK_31$Type_ox <- gsub("AK_31", "AK_30", Dilution_Isotherm_All$AK_31$Type_ox)
+# Define a function to add the new row
+add_new_row <- function(df) {
+  # Create a new row with 0 for NH4_Act_avg and Q_NH4_avg, and NA for other columns
+  new_row <- data.frame(matrix(NA, nrow = 1, ncol = ncol(df)))
+  colnames(new_row) <- colnames(df)
+  new_row$NH4_Act_avg <- 0.001
+  new_row$Q_NH4_avg <- 0.001
+  
+  # Set the ID column to the next number in the sequence
+  if ("ID" %in% colnames(df)) {
+    max_id <- max(df$ID, na.rm = TRUE)
+    new_row$ID <- max_id + 1
+  } else {
+    warning("ID column not found in the dataframe")
+  }
+  
+  # Copy the Ox and Type_ox values from the first row
+  if ("OX" %in% colnames(df)) {
+    new_row$Ox <- df$Ox[1]
+  } else {
+    warning("Ox column not found in the dataframe")
+  }
+  
+  if ("Type_ox" %in% colnames(df)) {
+    new_row$Type_ox <- df$Type_ox[1]
+  } else {
+    warning("Type_ox column not found in the dataframe")
+  }
+  
+  # Bind the new row to the end of the dataframe
+  df <- bind_rows(df, new_row)
+  
+  return(df)
+}
 
-Dilution_Isotherm_All$AK_06$Type_ox <- gsub("AK_06", "AK_05", Dilution_Isotherm_All$AK_06$Type_ox)
-
-Dilution_Isotherm_All$AK_11$Type_ox <- gsub("AK_11", "AK_10", Dilution_Isotherm_All$AK_11$Type_ox)
-
-Dilution_Isotherm_All$AM_16$Type_ox <- gsub("AM_16", "AM_15", Dilution_Isotherm_All$AM_16$Type_ox)
+# Apply the function to each dataframe in the list
+Dilution_Isotherm_All <- lapply(Dilution_Isotherm_All, add_new_row)
 
 ```
 
@@ -1032,10 +1080,10 @@ Dilution_Isotherm_All <- readRDS("Dilution_Isotherms_All.RDS")
 ```{r}
 
 generate_plot <- function(df, name) {
-  ggplot(df, aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg, na.rm = TRUE)) +
+  ggplot(df, aes(x = NH4_Act_avg, y = Q_NH4_avg, na.rm = TRUE)) +
     geom_point(shape = 21, size = 6, stroke = 2, color = "black", fill = "black") +
     geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
-    geom_errorbarh(aes(xmin = Ammonium_moles_eq_avg - Ammonium_moles_eq_sd, xmax = Ammonium_moles_eq_avg + Ammonium_moles_eq_sd)) +
+    geom_errorbarh(aes(xmin = NH4_Act_avg - NH4_Act_sd, xmax = NH4_Act_avg + NH4_Act_sd)) +
     xlab("Equilibrium Concentration (mM)") +
     ylab("Q (mmol NH4/g biochar)") +
     ggtitle(name) +  # Set plot title to the dataframe name
@@ -1163,7 +1211,7 @@ abline(a = 0, b = 1, col = "red")
 
 ```{r}
 
-saveRDS(Dilution_All_3, "Dilution_Isotherms_All_Act.RDS")
+saveRDS(Dilution_Isotherm_All, "Dilution_Isotherms_All_Act.RDS")
 ```
 
 ## Nov 2023 Edits
