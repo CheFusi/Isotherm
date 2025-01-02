@@ -17,7 +17,7 @@ libs_1<-c("tidyverse","knitr","psych","reshape2","rmarkdown")
 #data manipulation/exploration
 libs_2<-c("readxl","readr","tidyr","GGally","naniar","PUPAIM", "purrr")
 # plotting
-libs_3<-c("ggplot2","viridis","ggpubr","cowplot", "gridExtra")#,"ggthemr") 
+libs_3<-c("ggplot2","viridis","ggpubr","cowplot", "gridExtra","GGally","scales","ggcorrplot")#,"ggthemr") 
 
 #ggpubr = package for publishing
 #cowplot=  #to create compounded figures
@@ -35,7 +35,7 @@ library(PerformanceAnalytics)
 library(minpack.lm)
 library(nls2)
 library(ggcorrplot)
-library(GGally)
+
 ```
 
 ### Combining Dose and Dilutions
@@ -51,6 +51,8 @@ ALL_Biochars <- readRDS("ALL_Biochars.RDS")
 
 #file path changed with new laptop
 Titration_no_SS7 <- readRDS("/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Acid_Base_Titration/Titration/Titration_no_AL.RDS")
+
+Titration_ALL <- readRDS("/Users/soliverchefusi/Library/CloudStorage/OneDrive-Personal/Desktop/Fusi/Acid_Base_Titration/Titration/Titration_ALL.RDS")
 
 
 ```
@@ -111,12 +113,12 @@ ALL_Biochars <- ALL_Biochars %>%
 ## Applying to titration dataset
 
 # Replace 'Type' and 'Type_ox' columns based on mapping
-Titration_no_SS7 <- Titration_no_SS7 %>%
+Titration_ALL <- Titration_ALL %>%
   mutate(
     Type = recode(Type, !!!type_mapping))
 
 # Apply the function to replace 'Type_ox' values
-Titration_no_SS7 <- Titration_no_SS7 %>%
+Titration_ALL <- Titration_ALL %>%
   mutate(Type_ox = replace_type_ox(Type_ox))
 
 # Function to replace values in a column based on the mapping
@@ -128,7 +130,7 @@ replace_values_2 <- function(column) {
 }
 
 # Apply the function to replace 'Type_ox' and 'SSN' values
-Titration_no_SS7 <- Titration_no_SS7 %>%
+Titration_ALL <- Titration_ALL %>%
   mutate(
     SSN = replace_values_2(SSN)
   )
@@ -195,6 +197,75 @@ Dilution_All <- Dilution_All %>%
 Dilution_All$match_idx <- NULL
 
 ```
+
+### 17th December Update
+
+-   including ash data into the dataframes
+
+```{r}
+# Manually input the extracted data into a dataframe
+biochar_ash <- data.frame(
+  Biochar_species = c("SW5", "SW5", "SW5", "SW5", "SW5", "SW5", "SW5", "SW7", "SW7", "SW7", "SW7", "SW7","SW7", 
+                      "SS7", "SS7", "SS7", "SS7", "PP7", "PP7", "RS5", "RS5", "RS5", "RS5", "RS5"),
+  H2O2_pct = c("a.r.", 5, 10, 15, 20, 25, 30, "a.r.", 5, 10, 15, 20, 30, "a.r.", 0, 5, 10, "a.r.", 30, 
+               "a.r.", 10, 12, 15, 20),
+  Ash = c(1.3, 1.2, 2.4, 3.2, 3.5,4.3, 5.1, 1.9, 1.1, 1.3, 1.6, 1.9, 2.2, 63.9, 59.2, 60.3, 60.2, 1.9, 1.7, 
+          19.5, 7.6, 7.1, 8.2, 6.6),
+  C_prox = c(85.5, 75.7, 71.9, 70.6, 68.6, 67.3, 65.4, 90.2, 81.5, 78.7, 76.8, 75.1, 74.4, 29.6, 29.4, 24.8, 22.0, 
+        80.5, 80.4, 68.9, 69.5, 70.4, 71.8, 67.9),
+  H_prox = c(2.8, 3.2, 3.2, 3.2, 3.1, 3.0, 3.1, 1.8, 2.6, 2.7, 2.7, 2.6, 2.7, 0.8, 1.7, 1.6, 1.3, 2.0, 2.0, 1.8, 
+        2.7, 2.8, 2.8, 2.7),
+  O_prox = c(10.4, 19.9, 22.4, 23.1, 24.8,25.4, 26.4, 6.0, 14.4, 17.3, 18.9, 20.5, 20.3, 2.8, 6.5, 10.7, 14.5, 
+        NA, 15.0, 8.9, 19.1, 18.7, 16.2, 21.9),
+  N_prox = c(0.05, 0.05, 0.05, 0.05, 0.05,0.05, 0.05, 0.05, 0.5, 0.05, 0.05, 0.05, 0.4, 3.8, 3.3, 2.6, 2.0, NA, 0.8, 1.6, 
+        1.0, 0.9, 1.0, 0.8)
+)
+
+# Remove rows with 'a.r.'
+biochar_ash <- subset(biochar_ash, H2O2_pct != "a.r.")
+
+# Remove '*' and ensure consistent H2O2 format
+biochar_ash$H2O2_pct <- gsub("\\*", "", biochar_ash$H2O2_pct)
+
+# Create the Type_ox column
+biochar_ash$Type_ox <- paste0(biochar_ash$Biochar_species, "_", sprintf("%02d", as.numeric(biochar_ash$H2O2_pct)))
+
+
+# Keep desired columns: Type_ox, Ash, C, H, O, N
+biochar_proximate <- biochar_ash[, c("Type_ox", "Ash", "C_prox", "H_prox", "O_prox", "N_prox")]
+
+# Function to merge additional columns into target dataframe based on Type_ox
+add_proximate_columns <- function(target_df, biochar_reference_df) {
+  # Ensure Type_ox exists in both dataframes
+  if (!"Type_ox" %in% names(target_df) | !"Type_ox" %in% names(biochar_reference_df)) {
+    stop("Both dataframes must have a 'Type_ox' column.")
+  }
+  
+  # Perform a left join to add biochar columns
+  target_df_with_biochar <- merge(target_df, biochar_reference_df, 
+                                  by = "Type_ox", all.x = TRUE)
+  
+  # Return the updated dataframe
+  return(target_df_with_biochar)
+}
+
+# Example usage
+# target_df <- your_target_dataframe
+# target_df_with_biochar <- add_biochar_columns(target_df, biochar_full)
+```
+
+Adding Ash
+
+```{r}
+
+Dilution_All <- add_proximate_columns(Dilution_All,biochar_proximate)
+
+ALL_Biochars <- add_proximate_columns(ALL_Biochars,biochar_proximate)
+
+Titration_ALL <- add_proximate_columns(Titration_ALL,biochar_proximate)
+```
+
+End December 2024 update
 
 ### Henry's Law
 
@@ -303,7 +374,7 @@ Dose_Dilution$OC <- as.numeric(Dose_Dilution$OC)
 
 
 # Extract unique values for each "Type_ox" in ALL_Biochars
-unique_biochars <- unique(Titration_no_SS7[, c("Type_ox", "net_app_H_diff_avg_abs")])
+unique_biochars <- unique(Titration_ALL[, c("Type_ox", "net_app_H_diff_avg_abs")])
 
 # Merge the unique values with Dilution_All based on "Type_ox"
 merged_df <- merge(Dose_Dilution, unique_biochars, by = "Type_ox", all.x = TRUE)
@@ -526,7 +597,7 @@ ALL_Biochars_Q_3_No_SS7 <- ALL_Biochars %>%
 
 ```
 
-### \*\* Dilution Only Plot Conc
+### \*\* (Final) Dilution Only Plot Conc
 
 ```{r, warning = FALSE}
 
@@ -535,12 +606,12 @@ Q_Conc_Plot<- ggplot(Dilution_Data,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg,
     geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
    geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
-  xlab("Equilibrium Concentration (mM)")+
+  xlab("TAN Equilibrium Concentration (mM)")+
   ylab("Q (mmol TAN/g biochar)")+
   #ggtitle()+
   theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
+    text = element_text(family = "Helvetica"), 
     legend.position = c(0.2, 0.87),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
@@ -554,17 +625,18 @@ Q_Conc_Plot<- ggplot(Dilution_Data,aes(x = Ammonium_moles_eq_avg, y = Q_NH4_avg,
     legend.box.margin = margin(t = 5, r = 5, b = 5, l = 5),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
   ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
-  guides(color = "none") +
+   scale_fill_gradient(low = "orange", high = "blue") +
+   scale_color_gradient(low = "orange", high = "blue", guide = guide_legend()) +
+   guides(color = "none") +
+    guides(fill = "none") +  # Remove fill legend 
   scale_x_continuous(expand = c(0,0), limits = c(-20,550)) +
-  scale_y_continuous(expand = c(0,0), limits = c(-0.2,2.2))
+  scale_y_continuous(expand = c(0,0), limits = c(-0.2,3))
 
 ggsave(filename = "Q_Conc_Dilution_Plot.png", plot = Q_Conc_Plot, width = 10, height = 8, dpi = 300)
 Q_Conc_Plot
 ```
 
-### \*\*\* Dilution only Activity
+### \*\*\* (Final) Dilution only Activity
 
 ```{r, warning=FALSE}
 
@@ -633,11 +705,11 @@ Q_Conc_Plot<- ggplot(Dilution_Data_Qsd_25,aes(x = NH4_Act_avg, y = Q_NH4_avg, co
 Q_Conc_Plot
 ```
 
-### \*\* Surface Area Normalized Dilution Plot Q\<25
+### \*\* (Final) Surface Area Normalized Dilution Plot
 
 ```{r}
 
-Q_Conc_Plot<- ggplot(Dilution_Data_Qsd_25,aes(x = NH4_Act_avg, y = Q_NH4_avg_SSA, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+Q_Conc_Plot<- ggplot(Dilution_Data,aes(x = NH4_Act_avg, y = Q_NH4_avg_SSA, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
    geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
     #geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
    #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
@@ -647,7 +719,7 @@ Q_Conc_Plot<- ggplot(Dilution_Data_Qsd_25,aes(x = NH4_Act_avg, y = Q_NH4_avg_SSA
   #ggtitle()+
   theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
+    text = element_text(family = "Helvetica"),
     legend.position = c(0.82, 0.1),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
@@ -661,8 +733,8 @@ Q_Conc_Plot<- ggplot(Dilution_Data_Qsd_25,aes(x = NH4_Act_avg, y = Q_NH4_avg_SSA
     legend.box.margin = margin(t = 2, r = 2, b = 2, l = 2),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
   ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+   scale_fill_gradient(low = "orange", high = "blue")+
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend())+
   guides(color = "none") +
     scale_x_continuous(expand = c(0,0), limits = c(-10,410)) #+
   #scale_y_continuous(expand = c(0,0), limits = c(-0.2,3))
@@ -744,7 +816,7 @@ Q_CTRL_Plot<- ggplot(ALL_Biochars,aes(x = NH4_Act_avg, y = Q_Ctrl, color = OC,bo
   #ggtitle()+
   theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
+    text = element_text(family = "Helvetica"),
     legend.position = c(0.3, 0.85),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
@@ -758,11 +830,11 @@ Q_CTRL_Plot<- ggplot(ALL_Biochars,aes(x = NH4_Act_avg, y = Q_Ctrl, color = OC,bo
     legend.box.margin = margin(t = 5, r = 5, b = 5, l = 5),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
   ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
-  guides(color = "none") #+
-  #scale_x_continuous(expand = c(0,0), limits = c(-15,650))+
-  #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
+   scale_fill_gradient(low = "orange", high = "blue")+
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend())+
+  guides(color = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-15,370))+
+  scale_y_continuous(expand = c(0,0), limits = c(-0.2,22))
 
 ggsave(filename = "Q_Act_Control_All.png", plot = Q_CTRL_Plot, width = 10, height = 8, dpi = 300)
 
@@ -934,7 +1006,7 @@ Q_Conc_Dose_Plot
 
 ```
 
-#### \*\*\* Dose no SS7 Activity
+#### \*\*\* (Final) Dose no SS7 Activity
 
 ```{r}
 
@@ -979,7 +1051,7 @@ Q_Conc_Dose_Plot
 
 ```
 
-### \*\* Dose only Q_3 ALL
+### \*\* (Final) Dose only Q_3 ALL
 
 ```{r}
 
@@ -988,13 +1060,13 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_Q_3,aes(x = NH4_Act_avg, y = Q_NH4_avg, c
     geom_errorbarh(aes(xmin=NH4_Act_avg-NH4_Act_sd, xmax=NH4_Act_avg+NH4_Act_sd))+
    geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
-  xlab("Equilibrium Activity (mM)")+
+  xlab("TAN Equilibrium Activity (mM)")+
   ylab("Q (mmol TAN/g biochar)")+
-  ylab(NULL) +  # Remove y-axis label
+  #ylab(NULL) +  # Remove y-axis label
   #ggtitle()+
   theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
+    text = element_text(family = "Helvetica"),
     legend.position = c(0.3, 0.85),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
@@ -1008,11 +1080,13 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_Q_3,aes(x = NH4_Act_avg, y = Q_NH4_avg, c
     legend.box.margin = margin(t = 5, r = 5, b = 5, l = 5),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
   ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+   scale_fill_gradient(low = "orange", high = "blue")+
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend())+
   guides(color = "none") +
-  scale_x_continuous(expand = c(0,0), limits = c(-15,410))
- # scale_y_continuous(expand = c(0,0), limits = c(-1,23))
+  guides(fill = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-15,370)) +
+ # scale_y_continuous(expand = c(0,0), limits = c(-1,23)) +
+  annotate("text", x = 358, y = 3.8, label = "C", size = 10, fontface = "bold")
 
 
 ggsave(filename = "Q_Act_Dose_3_All.png", plot = Q_Conc_Dose_Plot, width = 10, height = 8, dpi = 300)
@@ -1021,7 +1095,7 @@ Q_Conc_Dose_Plot
 
 ```
 
-### \*\* Dose only no SS7 Activity Henry's
+### \*\* (Final) Dose only no SS7 Activity Henry's
 
 ```{r}
 
@@ -1036,7 +1110,7 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars,aes(x = NH4_Act_avg, y = Q_NH4_Henry, col
   #ggtitle()+
   theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
+    text = element_text(family = "Helvetica"),
     legend.position = c(0.3, 0.85),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
@@ -1050,10 +1124,10 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars,aes(x = NH4_Act_avg, y = Q_NH4_Henry, col
     legend.box.margin = margin(t = 5, r = 5, b = 5, l = 5),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
   ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+   scale_fill_gradient(low = "orange", high = "blue")+
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend())+
   guides(color = "none") +
-  scale_x_continuous(expand = c(0,0), limits = c(-15,410))
+  scale_x_continuous(expand = c(0,0), limits = c(-15,370))
  # scale_y_continuous(expand = c(0,0), limits = c(-1,23))
 
 
@@ -1063,11 +1137,11 @@ Q_Conc_Dose_Plot
 
 ```
 
-### \*\* Dose Only No SS7 SSA Normialized
+### \*\* (Final) Dose Only No SS7 SSA Normialized
 
 ```{r}
 
-Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_No_SS7,aes(x = NH4_Act_avg, y = Q_NH4_avg_SSA, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+Q_Conc_Dose_Plot<- ggplot(ALL_Biochars,aes(x = NH4_Act_avg, y = Q_NH4_avg_SSA, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
    geom_point(shape = 24, size = 6, stroke = 2, color = "black") +
     #geom_errorbarh(aes(xmin=Ammonium_moles_eq_avg-Ammonium_moles_eq_sd, xmax=Ammonium_moles_eq_avg+Ammonium_moles_eq_sd))+
    #geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
@@ -1077,8 +1151,8 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_No_SS7,aes(x = NH4_Act_avg, y = Q_NH4_avg
   #ggtitle()+
   theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
-    legend.position = c(0.25, 0.85),  # Adjust the legend position as needed
+    text = element_text(family = "Helvetica"),
+    legend.position = c(0.30, 0.85),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
     axis.title.x = element_text(margin = margin(t = 20), size = 24),
@@ -1091,10 +1165,10 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_No_SS7,aes(x = NH4_Act_avg, y = Q_NH4_avg
     legend.box.margin = margin(t = 5, r = 5, b = 5, l = 5),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
   ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+   scale_fill_gradient(low = "orange", high = "blue")+
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend())+
   guides(color = "none") +
-    scale_x_continuous(expand = c(0,0), limits = c(-15,410))
+    scale_x_continuous(expand = c(0,0), limits = c(-15,370))
   #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
 
 ggsave(filename = "Q_Act_Dose_SSA_Plot.png", plot = Q_Conc_Dose_Plot, width = 10, height = 8, dpi = 300)
@@ -1103,7 +1177,7 @@ Q_Conc_Dose_Plot
 
 ```
 
-### \*\* Dose Only ALL
+### \*\* (Final) Dose Only ALL
 
 ```{r}
 
@@ -1112,13 +1186,13 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars,aes(x = NH4_Act_avg, y = Q_NH4_avg, color
     geom_errorbarh(aes(xmin=NH4_Act_avg-NH4_Act_sd, xmax=NH4_Act_avg+NH4_Act_sd))+
    geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
-  xlab("Equilibrium Concentration (mM)")+
+  xlab("TAN Equilibrium Concentration (mM)")+
   ylab("Q (mmol NH4/g biochar)")+
   #ggtitle()+
-  theme_classic(base_size = 28) +
+    theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
-    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
+    text = element_text(family = "Helvetica"),
+    legend.position = c(0.3, 0.85),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
     axis.title.x = element_text(margin = margin(t = 20), size = 24),
@@ -1126,20 +1200,24 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars,aes(x = NH4_Act_avg, y = Q_NH4_avg, color
     panel.border = element_rect(color = "black", fill = NA, size = 3),
     legend.text = element_text(size = 20),
     legend.title = element_text(size = 24),
+    legend.direction = "horizontal",
+    legend.key.width = unit(1.5, "cm"),
+    legend.box.margin = margin(t = 5, r = 5, b = 5, l = 5),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
   ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
-  guides(color = "none") #+
-  #scale_x_continuous(expand = c(0,0), limits = c(-15,650))+
+   scale_fill_gradient(low = "orange", high = "blue")+
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend())+
+  guides(color = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-15,370))+
   #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
+    annotate("text", x = 358, y = 22.5, label = "A", size = 10, fontface = "bold")
 
 ggsave(filename = "Q_Act_Dose_ALL_Plot.png", plot = Q_Conc_Dose_Plot, width = 10, height = 8, dpi = 300)
 
 Q_Conc_Dose_Plot
 ```
 
-### \*\* Dose Only ALL Qsd\< 25%
+### \*\* (Final) Dose Only ALL Qsd\< 25%
 
 ```{r}
 
@@ -1150,47 +1228,11 @@ Q_Conc_Dose_Plot<- ggplot(ALL_Biochars_Qsd_25,aes(x = NH4_Act_avg, y = Q_NH4_avg
   # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
   xlab("Equilibrium Concentration (mM)")+
   ylab("Q (mmol NH4/g biochar)")+
+  ylab(NULL) +  # Remove y-axis label
   #ggtitle()+
   theme_classic(base_size = 28) +
-  theme(
-    text = element_text(family = "Times"),
-    legend.position = c(0.1, 0.8),  # Adjust the legend position as needed
-    axis.text.x = element_text(size = 24),
-    axis.text.y = element_text(size = 24),
-    axis.title.x = element_text(margin = margin(t = 20), size = 24),
-    axis.title.y = element_text(margin = margin(r = 20), size = 24),
-    panel.border = element_rect(color = "black", fill = NA, size = 3),
-    legend.text = element_text(size = 20),
-    legend.title = element_text(size = 24),
-    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
-  ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
-  guides(color = "none") #+
-  #scale_x_continuous(expand = c(0,0), limits = c(-15,650))+
-  #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
-
-ggsave(filename = "Q_Act_Dose_ALL_25_Plot.png", plot = Q_Conc_Dose_Plot, width = 10, height = 8, dpi = 300)
-
-Q_Conc_Dose_Plot
-```
-
-### \*\*\* Dose SS7 Only
-
-```{r}
-
-Q_Conc_Dose_Plot<- ggplot(SS7_df,aes(x = NH4_Act_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
-   geom_point(shape = 24, size = 6, stroke = 2, color = "black") +
-    geom_errorbarh(aes(xmin=NH4_Act_avg-NH4_Act_sd, xmax=NH4_Act_avg+NH4_Act_sd))+
-   geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
-  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
-  xlab("Equilibrium Activity (mM)")+
-  ylab("Q (mmol TAN/g biochar)")+
-  #ylab(NULL) +  # Remove y-axis label
-  #ggtitle()+
-  theme_classic(base_size = 28) +
-  theme(
-    text = element_text(family = "Times"),
+ theme(
+    text = element_text(family = "Helvetica"),
     legend.position = c(0.3, 0.85),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
@@ -1204,11 +1246,55 @@ Q_Conc_Dose_Plot<- ggplot(SS7_df,aes(x = NH4_Act_avg, y = Q_NH4_avg, color = OC,
     legend.box.margin = margin(t = 5, r = 5, b = 5, l = 5),
     legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
   ) +
-   scale_fill_gradient(low = "purple", high = "yellow")+
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend())+
+   scale_fill_gradient(low = "orange", high = "blue")+
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend())+
   guides(color = "none") +
-  scale_x_continuous(expand = c(0,0), limits = c(-15,410))
- # scale_y_continuous(expand = c(0,0), limits = c(-1,23))
+  guides(fill = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-15,370))+
+  #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
+    annotate("text", x = 358, y = 22.5, label = "B", size = 10, fontface = "bold")
+
+ggsave(filename = "Q_Act_Dose_ALL_25_Plot.png", plot = Q_Conc_Dose_Plot, width = 10, height = 8, dpi = 300)
+
+Q_Conc_Dose_Plot
+```
+
+### \*\* (Final) Dose SS7 Only
+
+```{r}
+
+Q_Conc_Dose_Plot<- ggplot(SS7_df,aes(x = NH4_Act_avg, y = Q_NH4_avg, color = OC,border= OC, fill=OC, na.rm=TRUE)) +
+   geom_point(shape = 24, size = 6, stroke = 2, color = "black") +
+    geom_errorbarh(aes(xmin=NH4_Act_avg-NH4_Act_sd, xmax=NH4_Act_avg+NH4_Act_sd))+
+   geom_errorbar(aes(ymin=Q_NH4_avg-Q_NH4_sd, ymax=Q_NH4_avg+Q_NH4_sd))+
+  # facet_wrap(~ Cation_Species, scales = "free")+ ###to separate into 3 plots
+  xlab("Equilibrium Activity (mM)")+
+  ylab("Q (mmol TAN/g biochar)")+
+  ylab(NULL) +  # Remove y-axis label
+  #ggtitle()+
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = c(0.3, 0.85),  # Adjust the legend position as needed
+    axis.text.x = element_text(size = 24),
+    axis.text.y = element_text(size = 24),
+    axis.title.x = element_text(margin = margin(t = 20), size = 24),
+    axis.title.y = element_text(margin = margin(r = 20), size = 24),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 24),
+    legend.direction = "horizontal",
+    legend.key.width = unit(1.5, "cm"),
+    legend.box.margin = margin(t = 5, r = 5, b = 5, l = 5),
+    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+  ) +
+   scale_fill_gradient(low = "orange", high = "blue")+
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend())+
+  guides(color = "none") +
+  guides(fill = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-15,370))+
+  #scale_y_continuous(expand = c(0,0), limits = c(-0.2,4))
+    annotate("text", x = 358, y = 22.5, label = "D", size = 10, fontface = "bold")
 
 
 ggsave(filename = "Q_SS7_Dose_Plot.png", plot = Q_Conc_Dose_Plot, width = 10, height = 8, dpi = 300)
@@ -1371,7 +1457,7 @@ ggsave(filename = "Q_Act_Low_Dose_Plot.png", plot = Q_Conc_Dose_Plot, width = 10
 Q_Conc_Dose_Plot
 ```
 
-### \*\*\* Dose Only no SS7 Q \< 3 Activity
+### \*\*\* (Final) Dose Only no SS7 Q \< 3 Activity
 
 ```{r}
 
@@ -1652,7 +1738,7 @@ Q_Conc_Plot <- ggplot(Dose_Dilution_Qsd_25_Q_3, aes(x = Ammonium_moles_eq_avg, y
 Q_Conc_Plot
 ```
 
-### \*\*\* Combined Dose-Dilution Plot Activity
+### \*\*\* (Final) Combined Dose-Dilution Plot Activity
 
 ```{r, warning=FALSE}
 
@@ -1685,7 +1771,7 @@ Q_Conc_Plot <- ggplot(Dose_Dilution_Q_3, aes(x = NH4_Act_avg, y = Q_NH4_avg, col
    guides(color = "none") +
   
   
-  guides(fill = "none") +  # Remove fill legend
+  guides(fill = "none") +  # Remove fill legend Helvetica
   scale_x_continuous(expand = c(0,0), limits = c(-10,370)) +
   scale_y_continuous(expand = c(0,0), limits = c(-0.2,3)) +
     # Add letter D label in the top-right corner
@@ -1995,10 +2081,9 @@ Dilution_Lang_parameters <- Dilution_Data %>%
   distinct() # Ensure unique entries
 ```
 
-### \*\* Dilution with Langmuir Fits
+### \*\* (Final) Dilution with Langmuir Fits
 
 ```{r}
-
 
 # Plot the data along with the Langmuir isotherm line for each sample
 Q_Conc_Plot <- ggplot(Dilution_Data, aes(x = NH4_Act_avg, y = Q_NH4_avg, color = OC, fill = OC, na.rm = TRUE)) +
@@ -2007,33 +2092,36 @@ Q_Conc_Plot <- ggplot(Dilution_Data, aes(x = NH4_Act_avg, y = Q_NH4_avg, color =
   geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
   geom_line(aes(y = Q_NH4_fit_Lang, group = Type_ox), linetype = "solid", size = 1.5) + # Add Langmuir isotherm line for each sample
   facet_wrap(~ Type_ox, scales = "fixed") +
-  xlab("Equilibrium Activity (mM)") +
+  xlab("TAN Equilibrium Activity (mM)") +
   ylab("Q (mmol TAN/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
-    legend.position = c(0.1, -0.2),  # Adjusted legend position
-    legend.direction = "horizontal",
-    legend.key.width = unit(1, "cm"),  # Make legend wider
-    legend.key.height = unit(0.5, "cm"),  # Make legend thinner
+    text = element_text(family = "Helvetica"),
+    legend.position = c(0.15, 0.92),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
     axis.title.x = element_text(margin = margin(t = 20), size = 24),
     axis.title.y = element_text(margin = margin(r = 20), size = 24),
-    plot.margin = margin(5, 5, 50, 5),  # Increased bottom margin to make space for the legend
-    panel.border = element_rect(color = "black", fill = NA, size = 3),
-    legend.text = element_text(size = 20),
-    legend.title = element_text(size = 24),
-    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+    panel.border = element_rect(color = "black", fill = NA, size = 2),
+    legend.text = element_text(size = 10),
+    legend.title = element_text(size = 14),
+    legend.direction = "horizontal",
+    legend.key.width = unit(0.75, "cm"),  # Reduce the key width
+    legend.key.height = unit(0.35, "cm"), # Reduce the key height
+    legend.box.margin = margin(t = 0.5, r = 0.5, b = 0.5, l = 0.5),
+    legend.box.background = element_rect(color = "black", size = 0.35, linetype = "solid")  # Make the border thinner
   ) +
-  scale_fill_gradient(low = "purple", high = "yellow") +
-  scale_color_gradient(low = "purple", high = "yellow") +
-  guides(fill = "none")
+  scale_fill_gradient(low = "orange", high = "blue") +
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend()) +
+  guides(color = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-15,370))
 
+# Save the plot
 ggsave(filename = "Langmuir_Dilution_Plot.png", plot = Q_Conc_Plot, width = 10, height = 8, dpi = 300)
 
+# Display the plot
+print(Q_Conc_Plot)
 
-Q_Conc_Plot
 ```
 
 ### Dilution Data - w/o Replciate OC and Qmax for s
@@ -2044,7 +2132,7 @@ Q_Conc_Plot
 unique_Dilution_data <- Dilution_Data %>% distinct(Type_ox, .keep_all = TRUE)
 ```
 
-### \*\*\*\* Dilution Qmax Plot - Manual Langmuir
+### \*\*\* (Final) Dilution Qmax Plot - Manual Langmuir
 
 ```{r, warning=FALSE}
 
@@ -2657,7 +2745,7 @@ unique_Dilution_data <- Dilution_Data %>% distinct(Type_ox, .keep_all = TRUE)
 
 ```
 
-## \*\* Freundlich Dilution Plots
+## \*\* (Final) Freundlich Dilution Plots
 
 ```{r}
 
@@ -2668,28 +2756,30 @@ Q_Conc_Plot <- ggplot(Dilution_Data, aes(x = NH4_Act_avg, y = Q_NH4_avg, color =
   geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
   geom_line(aes(y = Q_NH4_fit_Freundlich, group = Type_ox), linetype = "solid", size = 1.5) + # Add Freundlich isotherm line for each sample
   facet_wrap(~ Type_ox, scales = "fixed") +
-  xlab("Equilibrium Activity (mM)") +
+  xlab("TAN Equilibrium Activity (mM)") +
   ylab("Q (mmol TAN/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
-    legend.position = c(0.1, -0.2),  # Adjusted legend position
-    legend.direction = "horizontal",
-    legend.key.width = unit(1, "cm"),  # Make legend wider
-    legend.key.height = unit(0.5, "cm"),  # Make legend thinner
+    text = element_text(family = "Helvetica"),
+    legend.position = c(0.15, 0.92),  # Adjust the legend position as needed
     axis.text.x = element_text(size = 24),
     axis.text.y = element_text(size = 24),
     axis.title.x = element_text(margin = margin(t = 20), size = 24),
     axis.title.y = element_text(margin = margin(r = 20), size = 24),
-    plot.margin = margin(5, 5, 50, 5),  # Increased bottom margin to make space for the legend
-    panel.border = element_rect(color = "black", fill = NA, size = 3),
-    legend.text = element_text(size = 20),
-    legend.title = element_text(size = 24),
-    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
+    panel.border = element_rect(color = "black", fill = NA, size = 2),
+    legend.text = element_text(size = 10),
+    legend.title = element_text(size = 14),
+    legend.direction = "horizontal",
+    legend.key.width = unit(0.75, "cm"),  # Reduce the key width
+    legend.key.height = unit(0.35, "cm"), # Reduce the key height
+    legend.box.margin = margin(t = 0.5, r = 0.5, b = 0.5, l = 0.5),
+    legend.box.background = element_rect(color = "black", size = 0.35, linetype = "solid")  # Make the border thinner
   ) +
-  scale_fill_gradient(low = "purple", high = "yellow") +
-  scale_color_gradient(low = "purple", high = "yellow") +
-  guides(fill = "none")
+  scale_fill_gradient(low = "orange", high = "blue") +
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend()) +
+  guides(color = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-15,370))
+  #guides(fill = "none")
 
 ggsave(filename = "Freundlich_Dilution_Plot.png", plot = Q_Conc_Plot, width = 10, height = 8, dpi = 300)
 
@@ -2697,7 +2787,7 @@ Q_Conc_Plot
 
 ```
 
-### \*\*\*\* Freundlich Dilution Bulk OC
+### \*\*\* (Final) Freundlich Dilution Bulk OC
 
 ```{r, warning=FALSE}
 
@@ -2773,7 +2863,7 @@ print(Q_300_Freund_Plot)
 
 ```
 
-### \*\*\* Freundlich Dilution Surface OC
+### \*\*\* (Final) Freundlich Dilution Surface OC
 
 ```{r, warning=FALSE}
 
@@ -2850,7 +2940,7 @@ print(Q_300_Freund_Plot)
 
 ```
 
-### \*\*\* Freundlich Dilution Net App
+### \*\*\* (Final) Freundlich Dilution Net App
 
 ```{r, warning=FALSE}
 
@@ -5997,7 +6087,7 @@ print(Qmax_Plot)
 
 ```
 
-### \*\*\* Freundlich Dose Plot (Final)
+### \*\* (Final) Freundlich Dose Plot
 
 ```{r}
 
@@ -6070,11 +6160,11 @@ Q_Conc_Dose_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_freund_fit, aes(x = NH4_Act_a
   geom_errorbar(aes(ymin = Q_NH4_avg - Q_NH4_sd, ymax = Q_NH4_avg + Q_NH4_sd)) +
   geom_line(aes(y = fitted_values, group = Type_ox), size = 1.2, linetype = "solid") + # Add  isotherm line for each sample
   facet_wrap(~ Type_ox, scales = "fixed") +
-  xlab("Equilibrium Activity (mM)") +
+  xlab("TAN Equilibrium Activity (mM)") +
   ylab("Q (mmol TAN/g biochar)") +
   theme_classic(base_size = 28) +
   theme(
-    text = element_text(family = "Times"),
+    text = element_text(family = "Helvetica"),
     legend.direction = "vertical",
     legend.key.width = unit(0.9, "cm"),  # Make legend wider
     legend.key.height = unit(0.5, "cm"),  # Make legend thinner
@@ -6088,8 +6178,8 @@ Q_Conc_Dose_Plot <- ggplot(ALL_Biochars_Qsd_25_Q_3_freund_fit, aes(x = NH4_Act_a
     legend.title = element_text(size = 20),
     legend.box.background = element_rect(color = "black", size = 0.8, linetype = "solid")
   ) +
-  scale_fill_gradient(low = "purple", high = "yellow") +
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend()) +
+  scale_fill_gradient(low = "orange", high = "blue") +
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend()) +
   guides(color = "none")
 
 ggsave(filename = "Freundlich_Dose_Plot.png", plot = Q_Conc_Dose_Plot, width = 10, height = 8, dpi = 300)
@@ -6160,32 +6250,41 @@ print(Qmax_Plot)
 
 ```
 
-### \*\* Freudlich Dose Plot All Only
+### \*\*\*\*\* Freudlich Dose Plot All Only
 
 ```{r}
 
 # Create the plot with unique data
 Qmax_Plot <- ggplot(Freund_w_0_df, aes(x = OC, y = Q_300, color = Type, fill = Type)) +
   geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
-  geom_smooth(method = "lm", se = TRUE, color = "blue", aes(group = 1)) +  # Fit a single linear regression line for all data points
+  geom_smooth(method = "lm", se = TRUE, color = "brown", aes(group = 1)) +  # Fit a single linear regression line for all data points
   xlab("OC Bulk") +
-  ylab("Q (mmol TAN/g biochar)") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +  # Color-blind-friendly viridis palette
+  scale_color_viridis_d(option = "D") +  # Use the same palette for colors
+  labs(color = "Biochar", fill = "Biochar") +  # Manually change legend title to "Biochar"
   theme_classic(base_size = 28) +
-  theme(
-    text = element_text(family = "Times"),
-    legend.position = c(0.1, 0.8),
-    axis.text.x = element_text(size = 24),
-    axis.text.y = element_text(size = 24),
-    axis.title.x = element_text(margin = margin(t = 20), size = 24),
-    axis.title.y = element_text(margin = margin(r = 20), size = 24),
-    panel.border = element_rect(color = "black", fill = NA, size = 3),
-    legend.text = element_text(size = 20),
-    legend.title = element_text(size = 24),
-    legend.box.background = element_rect(color = "black", size = 1, linetype = "solid")
-  )
+     theme(
+     text = element_text(family = "Helvetica"),  # Changed font to sans-serif
+     legend.position = c(0.15, 0.77),  
+     axis.text.x = element_text(size = 26),  # Increased font size
+     axis.text.y = element_text(size = 26),
+     axis.title.x = element_text(margin = margin(t = 20), size = 26),
+     axis.title.y = element_text(margin = margin(r = 20), size = 26),
+     panel.border = element_rect(color = "black", fill = NA, size = 3),
+     legend.text = element_text(size = 22),  # Increased font size
+     legend.title = element_text(size = 26),
+     #legend.direction = "horizontal",
+     legend.key.width = unit(1, "cm"),
+     legend.box.margin = margin(t = 3, r = 5, b = 3, l = 3),
+     legend.box.background = element_rect(color = "black", size = 2, linetype = "solid")
+     ) + 
+  scale_x_continuous(expand = c(0, 0), limits = c(0.11, 0.52)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.01, 2.7))+
+  annotate("text", x = 0.5, y = 2.55, label = "A", size = 10, fontface = "bold")
 
 # Fit the linear regression model to the unique data
-lm_model <- lm(Q_300 ~ OC, data = Freund_w_0_df_No_SS7)
+lm_model <- lm(Q_300 ~ OC, data = Freund_w_0_df)
 
 # Summary of the regression model
 summary_lm <- summary(lm_model)
@@ -6213,20 +6312,23 @@ cat("Standard deviation of residuals (S25): ", round(residual_sd, 2), "\n")
 
 # Add R-squared value to the plot
 Qmax_Plot <- Qmax_Plot +
-  geom_text(aes(x = max(OC), y = max(Q_300), label = paste("R^2 =", round(r_squared, 2))),
-            hjust = 1, vjust = 5, color = "black", size = 6)
+  geom_text(aes(x = 0.45, y = 0.2, label = paste("R^2 =", sprintf("%.2f", round(r_squared, 2)))),
+            hjust = 1, vjust = 1, color = "black", size = 8, fontface = "bold")
 
 ggsave(filename = "Freund_Dose_ALL.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
 
 # Display the plot
 print(Qmax_Plot)
+
 ```
 
 ### \*\*\* Correlation Matrix
 
+filtering the data to contain only the columns with functional group measurements, including removing the low ash biochar
+
 ```{r, warning=FALSE}
 
-ALL_Biochars_Qsd_25_Q_3__No_SS7_corr <- ALL_Biochars_Qsd_25_Q_3_No_SS7 %>%
+ALL_Biochars_Q_3_No_SS7_corr <- ALL_Biochars_Q_3_No_SS7 %>%
   select("Type_ox","net_app_H_diff_avg_abs", "OC", "XPS_OC", "O", "CH", "C_O", "Carb", "pi_pi", "KsP", "Carb_pi_Ksp") %>%
   mutate(Carb_pi = Carb + pi_pi) %>%
   mutate(Carb_ksp = Carb + KsP) %>%
@@ -6240,67 +6342,100 @@ ALL_Biochars_Qsd_25_Q_3__No_SS7_corr <- ALL_Biochars_Qsd_25_Q_3_No_SS7 %>%
         "(C=O)-O" = "Carb_pi_Ksp_dec",
          "low ash surf O:C" = "Surf_OC_low_ash")
 
- chart.Correlation(ALL_Biochars_Qsd_25_Q_3__No_SS7_corr[,-1], histogram=TRUE, pch=19,  method =  "spearman")
 
 ```
 
-Customized Correlation Plot
+```{r}
+
+chart.Correlation(ALL_Biochars_Q_3_No_SS7_corr[,-1], histogram=TRUE, pch=19,  method =  "spearman")
+```
+
+### Customized Correlation
+
+source code: <https://github.com/ggobi/ggally/blob/3918c50808458dec0c1dfb17fcdc846e9bda80f3/R/gg-plots.R#L345>
 
 ```{r}
 
-# Custom function to display correlation coefficients without "Corr" text
-custom_cor <- function(data, mapping, ...) {
-  p <- GGally::ggally_cor(data, mapping, size = 12, ...) + 
-    theme(panel.background = element_rect(fill = "white"),
-          panel.grid = element_blank())
-  p$labels$label <- sub("Corr: ", "", p$labels$label)
-  p$labels$label <- sub("  ", "", p$labels$label)  # Remove double spaces if any
-  p
+# Custom function to display correlation coefficients with significance stars
+custom_cor <- function(data, mapping) {
+  # Get the column names from the mapping and extract the corresponding data from the dataframe
+  x_var <- data[[as_label(mapping$x)]]
+  y_var <- data[[as_label(mapping$y)]]
+  
+  # Ensure both variables are numeric
+  if (is.numeric(x_var) && is.numeric(y_var)) {
+    # Compute correlation and p-value
+    cor_test <- cor.test(x_var, y_var, use = "pairwise.complete.obs", method = "spearman")
+    corr_value <- cor_test$estimate
+    p_value <- cor_test$p.value
+    
+    # Determine significance stars
+    stars <- ifelse(p_value < 0.001, " \n ***", ifelse(p_value < 0.01, " \n **", ifelse(p_value < 0.05, " \n *", "")))
+    
+    # Create the plot with correlation value and stars
+    ggplot() + 
+      geom_text(
+        aes(x = 0.5, y = 0.5, label = sprintf("%0.2f%s", corr_value, stars)),  # Add stars
+        size = 15,  # Increased size by 10 points
+        vjust = 0.5, 
+        hjust = 0.5,
+        family = "Helvetica"  # Use Helvetica font
+      ) +
+      theme_void()  # This theme removes all additional elements for a clean look
+  } else {
+    ggplot() + 
+      geom_text(aes(x = 0.5, y = 0.5, label = "NA"), size = 7, vjust = 0.5, hjust = 0.5, family = "Helvetica") +
+      theme_void()  # Fallback for non-numeric variables
+  }
 }
 
-# Custom function to display histograms with black fill and no grid
-custom_diag_hist <- function(data, mapping, ...) {
+# Custom scatter plot for lower triangle with linear fit, using viridis color palette
+custom_smooth <- function(data, mapping) {
   ggplot(data = data, mapping = mapping) +
-    geom_histogram(binwidth = 0.02, fill = "black", color = "black", ...) +
-    theme_minimal(base_size = 18) +
+    geom_point(alpha = 1, size = 4, color = viridis(1)[1]) +  # Use viridis color palette for points
+    geom_smooth(method = "lm", color = viridis(1)[1], fill = viridis(1)[1], alpha = 0.2, size = 2) +  # Match confidence interval to histogram color with lower alpha
+    theme_minimal(base_size = 26) +
     theme(panel.grid = element_blank(), 
           panel.background = element_rect(fill = "white"))
 }
 
-# Custom function to display scatter plots with no grid
-custom_smooth <- function(data, mapping, ...) {
+# Custom diagonal plot with both histogram and density, using viridis color palette
+custom_diag_hist_density <- function(data, mapping) {
   ggplot(data = data, mapping = mapping) +
-    geom_point(alpha = 1, size = 3, color = "black") +
-    geom_smooth(method = "lm", color = "black") +
-    theme_minimal(base_size = 18) +
+    geom_histogram(aes(y = ..density..), binwidth = 0.025, fill = viridis(1)[1], color = "black", alpha = 0.8) +  # Use viridis color palette for histogram
+    geom_density(color = viridis(1)[1], size = 2) +  # Overlay density plot using viridis color
+    theme_minimal(base_size = 26) +
     theme(panel.grid = element_blank(), 
           panel.background = element_rect(fill = "white"))
 }
 
-# Create the correlation plot using ggpairs with custom functions
+# Create the correlation plot using ggpairs with custom functions and viridis colors
 corr_plot <- ggpairs(
-  ALL_Biochars_Qsd_25_Q_3__No_SS7_corr[,-1], 
-  lower = list(continuous = custom_smooth),  # Custom scatter plot in lower triangle
-  diag = list(continuous = custom_diag_hist),  # Custom histogram in diagonal
-  upper = list(continuous = custom_cor)  # Custom correlation coefficients in upper triangle
+  data = ALL_Biochars_Q_3_No_SS7_corr[, -1],  # Exclude the first column if necessary
+  upper = list(continuous = custom_cor),  # Use custom correlation function for upper
+  lower = list(continuous = wrap(custom_smooth)),  # Custom scatter plot for lower
+  diag = list(continuous = wrap(custom_diag_hist_density))  # Custom diagonal with combined histogram and density
 )
 
-# Customize the plot appearance, including text size
+# Customize the plot appearance
 corr_plot <- corr_plot + 
-  theme_bw(base_size = 18) +  # Base text size for the plot
+  theme_bw(base_size = 22) +  # Base text size for the plot
   theme(
-    axis.text = element_text(size = 18),  # Text size for axis text
-    axis.title = element_text(size = 18),  # Text size for axis titles
-    strip.text = element_text(size = 18),  # Text size for facet labels
+    axis.text.x = element_text(size = 19, angle = 30, hjust = 0.5, family = "Helvetica"),  # Horizontal x-axis labels with Helvetica
+    axis.text.y = element_text(size = 19, family = "Helvetica"),  # Horizontal y-axis labels with Helvetica
+    axis.title = element_text(size = 23, family = "Helvetica"),  # Axis titles with Helvetica
+    strip.text = element_text(size = 23, family = "Helvetica"),  # Facet labels in Helvetica
+    strip.background = element_rect(fill = alpha(viridis(1)[1], 0.1)),  # Set background of plot titles to histogram color
     panel.grid = element_blank(),  # Remove grid lines
     panel.background = element_rect(fill = "white")  # Set background to white
   )
 
 # Save the plot
-ggsave(filename = "custom_corr_mat.png", plot = corr_plot, width = 20, height = 20, dpi = 300)
+ggsave(filename = "custom_corr_hist_density.png", plot = corr_plot, width = 20, height = 20, dpi = 300)
 
 # Print the plot
 print(corr_plot)
+
 
 ```
 
@@ -6475,36 +6610,39 @@ for (sample in unique_OC) {
 }
 ```
 
-### pH (no SS7)
+### \*\* pH (no SS7)
 
 ```{r}
 
 # Create the plot
-pH_plot <- ggplot(ALL_Biochars_No_SS7, aes(x = NH4_Act_avg, y = pH, group = Type_ox, color = OC)) +
-  geom_point(size=5) +
+pH_plot <- ggplot(ALL_Biochars_No_SS7, aes(x = NH4_Act_avg, y = pH, color = OC, fill = OC, border = OC))+ # group = Type_ox, color = OC)) +
+  geom_point(shape = 22, size = 6, stroke = 2, color = "black") +
   #scale_color_brewer(palette = "Set1") +  # Use a nicer color palette
   theme_classic(base_size = 10) +
-  xlab("TAN Activity (mM)") +
+  xlab("TAN Equilibrium Activity (mM)") +
   ylab("pH") +
   # ggtitle(sample) +  # Add sample name as title
-  theme(
-    text = element_text(family = "Times"),
-    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),  # Rotate x-axis labels for better readability
-    axis.text.y = element_text(size = 12),
-    axis.title.x = element_text(margin = margin(t = 10), size = 14),
-    axis.title.y = element_text(margin = margin(r = 10), size = 14),
-    panel.border = element_rect(color = "black", fill = NA, size = 1),
-    legend.position = c(0.05, 0.30),  # Move legend to top left inside the plot
-    legend.direction = "horizontal",
-    legend.justification = c("left", "top"),
-    legend.text = element_text(size = 6),  # Decrease legend text size
-    legend.title = element_text(size = 8)
-  )+
+    theme_classic(base_size = 28) +
+     theme(
+     text = element_text(family = "Helvetica"),  # Changed font to sans-serif
+     legend.position = c(0.75, 0.12),  
+     axis.text.x = element_text(size = 26, color = "black"),  # Increased font size
+     axis.text.y = element_text(size = 26, color = "black"),
+     axis.title.x = element_text(margin = margin(t = 20), size = 26),
+     axis.title.y = element_text(margin = margin(r = 20), size = 26),
+     panel.border = element_rect(color = "black", fill = NA, size = 3),
+     legend.text = element_text(size = 22),  # Increased font size
+     legend.title = element_text(size = 26),
+     legend.direction = "horizontal",
+     legend.key.width = unit(1.2, "cm"),
+     legend.box.margin = margin(t = 5, r = 8, b = 5, l = 5),
+     legend.box.background = element_rect(color = "black", size = 2, linetype = "solid")
+     ) + 
   scale_x_continuous(expand = c(0,0), limits = c(70,420)) +
   scale_y_continuous(expand = c(0,0), limits = c(8,9)) +
   
-  scale_fill_gradient(low = "purple", high = "yellow") +
-  scale_color_gradient(low = "purple", high = "yellow", guide = guide_legend()) +
+  scale_fill_gradient(low = "orange", high = "blue") +
+  scale_color_gradient(low = "orange", high = "blue", guide = guide_legend()) +
   guides(color = "none")
 
 ggsave(filename = "pH_Dose_Plot.png", plot = pH_plot, width = 10, height = 8, dpi = 300)
@@ -6512,4 +6650,1769 @@ ggsave(filename = "pH_Dose_Plot.png", plot = pH_plot, width = 10, height = 8, dp
 # Print the plot
 print(pH_plot)
 
+```
+
+### December 17 2024 Update - More Complex Linear Modeling Approach
+
+Responding to Reviewer 1's suggestions
+
+A.  
+
+```{r}
+
+
+# Fit the extended linear regression model
+lm_model_extended <- lm(Q_400_Freundlich ~ OC * Ash, data = unique_Dilution_data)
+
+# Extract R-squared value from the model
+r_squared <- summary(lm_model_extended)$r.squared
+r_squared_label <- paste("R^2 =", sprintf("%.2f", r_squared))  # Format to 2 decimal places
+
+# Calculate p-value for the slope (OC coefficient)
+p_value <- summary(lm_model_extended)$coefficients["OC", "Pr(>|t|)"]
+
+# Extract regression equation
+coefficients <- coef(lm_model_extended)
+equation <- paste("Q_max =",
+                  round(coefficients[1], 2), "+",
+                  round(coefficients[2], 2), "* OC +",
+                  round(coefficients[3], 2), "* Ash")
+
+# Add significance for the p-value
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract F-statistic and degrees of freedom
+f_statistic <- summary(lm_model_extended)$fstatistic[1]
+df1 <- summary(lm_model_extended)$fstatistic[2]
+df2 <- summary(lm_model_extended)$fstatistic[3]
+
+# Extract residual standard deviation
+residual_sd <- summary(lm_model_extended)$sigma
+
+# Print regression details to the console
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC values and set Ash to its mean for smooth predictions
+OC_seq <- seq(min(unique_Dilution_data$OC), max(unique_Dilution_data$OC), length.out = 100)
+Ash_mean <- mean(unique_Dilution_data$Ash, na.rm = TRUE)
+
+# Generate new data for prediction and extract confidence intervals
+prediction_data <- data.frame(OC = OC_seq, Ash = Ash_mean)
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals to prediction_data
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot with the smooth extended model line and confidence band
+Qmax_Plot <- ggplot(unique_Dilution_data, aes(x = OC, y = Q_400_Freundlich, color = Type, fill = Type)) +
+  # Add points from the original data
+  geom_point(shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add the confidence band
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3, inherit.aes = FALSE) +
+  
+  # Add the regression line
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5, inherit.aes = FALSE) +
+  
+  # Add axis labels
+  xlab("OC Bulk") +
+  ylab("Q_250 (mmol TAN/g biochar)") +
+  
+  # Add consistent legend titles
+  scale_fill_viridis_d(option = "D") +
+  scale_color_viridis_d(option = "D") +
+  labs(color = "Biochar", fill = "Biochar") +
+  
+  # Add theme and legend position
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = c(0.15, 0.67),  # Adjust legend position
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3),
+    legend.text = element_text(size = 22),
+    legend.title = element_text(size = 26),
+    legend.direction = "vertical",
+    legend.key.width = unit(1.5, "cm"),
+    legend.box.margin = margin(t = 5, r = 8, b = 5, l = 5),
+    legend.box.background = element_rect(color = "black", size = 2, linetype = "solid")
+  ) +
+  
+  # Add annotations for regression metrics
+  annotate("text", x = 0.35, y = 0.2, label = r_squared_label, 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "A_ash", size = 10, fontface = "bold") +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.37)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+# Save and display the final plot
+#ggsave(filename = "Freund_Dose_OC_Plot.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
+print(Qmax_Plot)
+
+```
+
+B no SS7
+
+```{r}
+
+# Fit the extended linear regression model
+lm_model_extended <- lm(Q_300 ~ OC * Ash, data = Freund_w_0_df_No_SS7)
+
+# Extract R-squared value from the model
+r_squared <- summary(lm_model_extended)$r.squared
+r_squared_label <- paste("R^2 =", sprintf("%.2f", r_squared))  # Format to 2 decimal places
+
+# Calculate p-value for the slope (OC coefficient)
+p_value <- summary(lm_model_extended)$coefficients["OC", "Pr(>|t|)"]
+
+# Extract regression equation
+coefficients <- coef(lm_model_extended)
+equation <- paste("Q_max =",
+                  round(coefficients[1], 2), "+",
+                  round(coefficients[2], 2), "* OC +",
+                  round(coefficients[3], 2), "* Ash")
+
+# Add significance for the p-value
+significance <- ifelse(p_value < 0.001, "***", ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", "ns")))
+
+# Extract F-statistic and degrees of freedom
+f_statistic <- summary(lm_model_extended)$fstatistic[1]
+df1 <- summary(lm_model_extended)$fstatistic[2]
+df2 <- summary(lm_model_extended)$fstatistic[3]
+
+# Extract residual standard deviation
+residual_sd <- summary(lm_model_extended)$sigma
+
+# Print regression details to the console
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value, "(", significance, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC values and set Ash to its mean for smooth predictions
+OC_seq <- seq(min(Freund_w_0_df_No_SS7$OC), max(Freund_w_0_df_No_SS7$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df_No_SS7$Ash, na.rm = TRUE)
+
+# Generate new data for prediction and extract confidence intervals
+prediction_data <- data.frame(OC = OC_seq, Ash = Ash_mean)
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals to prediction_data
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot with the smooth extended model line and confidence band
+Qmax_Plot <- ggplot() +  # Start with an empty ggplot
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df_No_SS7, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add the confidence band
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  
+  # Add the regression line
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Add axes, labels, and color palette
+  scale_fill_viridis_d(option = "D") +  # Color-blind-friendly viridis palette
+  scale_color_viridis_d(option = "D") +  # Use the same palette for colors
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  ylab(NULL) +
+  theme_classic(base_size = 28) +
+   theme_classic(base_size = 30) +  # Increased base font size by 2 points
+   theme(
+     text = element_text(family = "Helvetica"),  # Changed font to sans-serif
+     legend.position = c(0.30, 0.87),  
+     axis.text.x = element_text(size = 26),  # Increased font size
+     axis.text.y = element_text(size = 26),
+     axis.title.x = element_text(margin = margin(t = 20), size = 26),
+     axis.title.y = element_text(margin = margin(r = 20), size = 26),
+     panel.border = element_rect(color = "black", fill = NA, size = 3),
+     legend.text = element_text(size = 22),  # Increased font size
+     legend.title = element_text(size = 26),
+     legend.direction = "horizontal",
+     legend.key.width = unit(1.5, "cm"),
+     legend.box.margin = margin(t = 5, r = 8, b = 5, l = 5),
+     legend.box.background = element_rect(color = "black", size = 2, linetype = "solid")  # Adjusted thickness to match plot
+   ) +
+   guides(color = "none") +
+  scale_x_continuous(expand = c(0,0), limits = c(-0.01,0.37)) +  # Ensure x limits are consistent with the smoothing function
+  scale_y_continuous(expand = c(0,0), limits = c(-0.3,2.7)) +
+  theme(legend.position = "none") +
+   annotate("text", x = 0.35, y = 0.2, label = r_squared_label, hjust = 1, vjust = 1,
+           size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "B_ash", size = 10, fontface = "bold")
+
+#ggsave(filename = "Freund_Dose_OC_Plot.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
+
+# Display the plot
+print(Qmax_Plot) 
+```
+
+### B with SS7 and Ash
+
+#### \*\* Ash and Ash:OC Interaction term
+
+-   The interaction term OC:Ash quantifies how the effect of OC changes depending on ash content (or vice versa).
+
+```{r}
+
+# Fit the extended linear regression model
+lm_model_extended <- lm(Q_300 ~ OC + Ash + OC:Ash, data = Freund_w_0_df)
+
+# Expands to Q_300 ~ OC + Ash + OC:Ash
+
+# Extract R-squared value from the model
+r_squared <- summary(lm_model_extended)$r.squared
+r_squared_label <- paste("R^2 =", sprintf("%.2f", r_squared))
+
+# Extract regression coefficients and p-values
+coefficients <- coef(lm_model_extended)
+p_value_oc <- summary(lm_model_extended)$coefficients["OC", "Pr(>|t|)"]
+p_value_ash <- summary(lm_model_extended)$coefficients["Ash", "Pr(>|t|)"]
+p_value_interaction <- summary(lm_model_extended)$coefficients["OC:Ash", "Pr(>|t|)"]
+
+# Format equation with interaction term
+equation <- paste(
+  "Q_max =",
+  round(coefficients[1], 2), "+",
+  round(coefficients[2], 2), "* OC +",
+  round(coefficients[3], 2), "* Ash +",
+  round(coefficients[4], 2), "* OC:Ash"
+)
+
+# Add significance for p-values
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_interaction <- ifelse(p_value_interaction < 0.001, "***", ifelse(p_value_interaction < 0.01, "**", ifelse(p_value_interaction < 0.05, "*", "ns")))
+
+# Extract F-statistic and residual standard deviation
+f_statistic <- summary(lm_model_extended)$fstatistic[1]
+df1 <- summary(lm_model_extended)$fstatistic[2]
+df2 <- summary(lm_model_extended)$fstatistic[3]
+residual_sd <- summary(lm_model_extended)$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for OC:Ash: ", p_value_interaction, "(", significance_interaction, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC values and set Ash to its mean for smooth predictions
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+
+# Generate new data for prediction and extract confidence intervals
+prediction_data <- data.frame(OC = OC_seq, Ash = Ash_mean)
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals to prediction_data
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot with the smooth extended model line and confidence band
+Qmax_Plot <- ggplot() +  # Start with an empty ggplot
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add the confidence band
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  
+  # Add the regression line
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  annotate("text", x = 0.43, y = 0.2, label = r_squared_label, 
+           size = 8, fontface = "bold", color = "black") +
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +  # Color-blind-friendly viridis palette
+  scale_color_viridis_d(option = "D") +  # Use the same palette for colors
+  labs(color = "Biochar", fill = "Biochar") +  # Manually change legend title to "Biochar"
+  theme_classic(base_size = 28) +
+     theme(
+     text = element_text(family = "Helvetica"),  # Changed font to sans-serif
+     legend.position = "none", #c(0.15, 0.77),  
+     axis.text.x = element_text(size = 26),  # Increased font size
+     axis.text.y = element_text(size = 26),
+     axis.title.x = element_text(margin = margin(t = 20), size = 26),
+     axis.title.y = element_text(margin = margin(r = 20), size = 26),
+     panel.border = element_rect(color = "black", fill = NA, size = 3),
+     legend.text = element_text(size = 22),  # Increased font size
+     legend.title = element_text(size = 26),
+     #legend.direction = "horizontal",
+     legend.key.width = unit(1.2, "cm"),
+     legend.box.margin = margin(t = 5, r = 8, b = 5, l = 5),
+     legend.box.background = element_rect(color = "black", size = 2, linetype = "solid")
+     ) + 
+  scale_x_continuous(expand = c(0, 0), limits = c(0.11, 0.52)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.01, 2.7))+
+  annotate("text", x = 0.5, y = 2.55, label = "B", size = 10, fontface = "bold")
+
+ggsave(filename = "Freund_Dose_OC_Ash_Interact_Plot.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
+
+# Display the plot
+print(Qmax_Plot) 
+```
+
+Explicit Interaction
+
+-   Center both predictors (OC and Ash) before including the interaction term. This will help interpret the main effects (OC and Ash) more clearly, as they will represent their effects when the other variable is at its mean:
+
+    -   The OC coefficient now represents the effect of OC on nitrogen sorption when ash is at its mean.
+
+    -   The Ash coefficient represents the effect of ash when OC is at its mean.
+
+    -   The interaction term quantifies how these effects change when OC and ash vary together.
+
+```{r}
+
+# Center the predictors and ensure they are numeric
+Freund_w_0_df$OC_centered <- as.numeric(scale(Freund_w_0_df$OC, center = TRUE, scale = FALSE))
+Freund_w_0_df$Ash_centered <- as.numeric(scale(Freund_w_0_df$Ash, center = TRUE, scale = FALSE))
+OC_mean <- mean(Freund_w_0_df$OC, na.rm = TRUE)  # Save the mean for back-transformation
+
+# Fit the extended linear regression model
+lm_model_extended <- lm(Q_300 ~ OC_centered * Ash_centered, data = Freund_w_0_df)
+
+# Extract R-squared value
+r_squared <- summary(lm_model_extended)$r.squared
+r_squared_label <- paste("R^2 =", sprintf("%.2f", r_squared))
+
+# Extract regression coefficients
+coefficients <- coef(lm_model_extended)
+
+# Extract p-values for coefficients
+p_value_oc <- summary(lm_model_extended)$coefficients["OC_centered", "Pr(>|t|)"]
+p_value_ash <- summary(lm_model_extended)$coefficients["Ash_centered", "Pr(>|t|)"]
+p_value_interaction <- summary(lm_model_extended)$coefficients["OC_centered:Ash_centered", "Pr(>|t|)"]
+
+# Significance for p-values
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_interaction <- ifelse(p_value_interaction < 0.001, "***", ifelse(p_value_interaction < 0.01, "**", ifelse(p_value_interaction < 0.05, "*", "ns")))
+
+# Extract additional metrics
+f_statistic <- summary(lm_model_extended)$fstatistic[1]
+df1 <- summary(lm_model_extended)$fstatistic[2]
+df2 <- summary(lm_model_extended)$fstatistic[3]
+residual_sd <- summary(lm_model_extended)$sigma
+
+# Print regression details to the console
+cat("Equation: Q_max =", 
+    round(coefficients[1], 2), "+", 
+    round(coefficients[2], 2), "* OC_centered +",
+    round(coefficients[3], 2), "* Ash_centered +",
+    round(coefficients[4], 2), "* OC_centered:Ash_centered", "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for Interaction: ", p_value_interaction, "(", significance_interaction, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC_centered values and set Ash_centered to its mean
+OC_seq_centered <- seq(min(Freund_w_0_df$OC_centered), max(Freund_w_0_df$OC_centered), length.out = 100)
+Ash_mean_centered <- mean(Freund_w_0_df$Ash_centered, na.rm = TRUE)
+
+# Generate predictions and confidence intervals
+prediction_data <- data.frame(OC_centered = OC_seq_centered, Ash_centered = Ash_mean_centered)
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Back-transform OC_centered to the original OC scale
+prediction_data$OC <- OC_seq_centered + OC_mean
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot
+Qmax_Plot <- ggplot() +
+  # Original data points
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Confidence band and regression line on original OC scale
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Add regression details to the plot
+  annotate("text", x = 0.35, y = 2.4, label = r_squared_label, hjust = 1, vjust = 1,
+           size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "B_ash", size = 10, fontface = "bold") +
+  
+  # Customize axes and theme
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+# Save and display the final plot
+print(Qmax_Plot)
+```
+
+#### \* Weighted ash
+
+-   Since the effect of OC on nitrogen sorption is possible more direct in low-ash biochars, you can give greater weight to low-ash samples in the regression model. This ensures that the regression fit is more sensitive to the biochars where OC is more available.
+
+-   Low-ash biochars, where OC is fully available for sorption, contribute more to the model fit.
+
+-   This prevents high-ash biochars from overly skewing the model.
+
+    1.  Ash as an independent factor affecting sorption.
+
+    2.  Interaction effects, reflecting how OC’s contribution changes with Ash.
+
+    3.  Weighting, to reduce bias from potentially unreliable high-ash biochar observations.
+
+```{r}
+
+# Fit the linear model with interaction term and weights
+# lm_model_extended <- lm(Q_300 ~ OC + Ash + OC:Ash, 
+#                         data = Freund_w_0_df, 
+#                         weights = 1 / (Freund_w_0_df$Ash + 1))
+
+weights_ <- 1 / (Freund_w_0_df$Ash) # addind one in the denominator only in instances where ash is 0 which we hardly deal with for biochars. 
+
+weights_normalized <- weights_ / mean(weights_, na.rm =TRUE)
+
+lm_model_extended <- lm(Q_300 ~ OC + Ash + OC:Ash, data = Freund_w_0_df, weights = weights_)
+
+# Extract the model summary
+summary_lm <- summary(lm_model_extended)
+
+# Extract R-squared value
+r_squared <- summary_lm$r.squared
+r_squared_label <- paste("R^2 =", sprintf("%.2f", r_squared))  # Format to 2 decimal places
+
+# Extract all coefficients dynamically
+coefficients <- coef(summary_lm)
+
+# Dynamically format the regression equation
+equation <- paste0(
+  "Q_max = ", round(coefficients["(Intercept)"], 2),
+  " + ", round(coefficients["OC"], 2), " * OC",
+  " + ", round(coefficients["Ash"], 2), " * Ash",
+  " + ", round(coefficients["OC:Ash"], 2), " * OC:Ash"
+)
+
+# Extract p-values for all coefficients
+p_values <- summary_lm$coefficients[, "Pr(>|t|)"]
+significance <- sapply(p_values, function(p) {
+  if (p < 0.001) "***" else if (p < 0.01) "**" else if (p < 0.05) "*" else "ns"
+})
+
+# Extract F-statistic and residual standard deviation
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", round(p_values["OC"], 5), "(", significance["OC"], ")\n")
+cat("p-value for Ash: ", round(p_values["Ash"], 5), "(", significance["Ash"], ")\n")
+cat("p-value for OC:Ash: ", round(p_values["OC:Ash"], 5), "(", significance["OC:Ash"], ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC values and set Ash to its mean for predictions
+OC_seq <- seq(-0.01, 0.57, length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+
+# Generate new data for prediction (including interaction)
+prediction_data <- data.frame(OC = OC_seq, Ash = Ash_mean)
+prediction_data$`OC:Ash` <- prediction_data$OC * prediction_data$Ash
+
+# Predict and add to prediction_data
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Plot the data and predictions
+Qmax_Plot <- ggplot() +
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type), 
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_ribbon(data = prediction_data, aes(x = OC, ymin = lwr, ymax = upr), 
+              fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  annotate("text", x = 0.43, y = 0.2, label = r_squared_label, 
+           size = 8, fontface = "bold", color = "black") +
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +  # Color-blind-friendly viridis palette
+  scale_color_viridis_d(option = "D") +  # Use the same palette for colors
+  labs(color = "Biochar", fill = "Biochar") +  # Manually change legend title to "Biochar"
+  theme_classic(base_size = 28) +
+     theme(
+     text = element_text(family = "Helvetica"),  # Changed font to sans-serif
+     legend.position = c(0.15, 0.77),  
+     axis.text.x = element_text(size = 26),  # Increased font size
+     axis.text.y = element_text(size = 26),
+     axis.title.x = element_text(margin = margin(t = 20), size = 26),
+     axis.title.y = element_text(margin = margin(r = 20), size = 26),
+     panel.border = element_rect(color = "black", fill = NA, size = 3),
+     legend.text = element_text(size = 22),  # Increased font size
+     legend.title = element_text(size = 26),
+     #legend.direction = "horizontal",
+     legend.key.width = unit(1.2, "cm"),
+     legend.box.margin = margin(t = 5, r = 8, b = 5, l = 5),
+     legend.box.background = element_rect(color = "black", size = 2, linetype = "solid")
+     ) + 
+  scale_x_continuous(expand = c(0, 0), limits = c(0.11, 0.52)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.01, 2.7))
+
+ggsave(filename = "Freund_Dose_OC_Ash_Plot.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
+
+# Display the final plot
+print(Qmax_Plot)
+```
+
+\*\*Regularized (Ridge Regression)
+
+```{r}
+
+# Load required library
+library(glmnet)
+
+# Prepare the design matrix and response vector
+X <- model.matrix(~ OC + Ash + OC:Ash, data = Freund_w_0_df)  # Create model matrix
+y <- Freund_w_0_df$Q_300                                     # Response variable
+weights <- 1 / Freund_w_0_df$Ash  # Weights (excluding +1, since Ash > 0)
+
+# Standardize weights to stabilize computations
+weights <- weights / mean(weights, na.rm = TRUE)
+
+# Fit the ridge regression model using cross-validation to select the optimal lambda
+cv_ridge <- cv.glmnet(
+  X, y, alpha = 0, weights = weights, 
+  standardize = TRUE, family = "gaussian", nfolds = 10
+)
+
+# Extract the best lambda value
+best_lambda <- cv_ridge$lambda.min
+
+# Fit the final ridge regression model using the optimal lambda
+ridge_model <- glmnet(X, y, alpha = 0, lambda = best_lambda, weights = weights)
+
+# Extract coefficients at the best lambda
+ridge_coefficients <- coef(ridge_model)
+ridge_coefficients <- as.matrix(ridge_coefficients)  # Convert to a matrix for easier handling
+
+# Print the coefficients
+cat("Ridge Regression Coefficients:\n")
+print(ridge_coefficients)
+
+# Predict using the ridge regression model
+X_new <- model.matrix(~ OC + Ash + OC:Ash, data = Freund_w_0_df)  # Use the same design matrix
+predictions <- predict(ridge_model, newx = X_new)
+
+# Evaluate model performance
+ridge_r_squared <- 1 - sum((y - predictions)^2) / sum((y - mean(y))^2)
+ridge_r_squared <- round(ridge_r_squared, 2)  # R^2 metric
+
+cat("R-squared for Ridge Regression:", ridge_r_squared, "\n")
+
+# Generate a grid for visualization
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+grid_data <- data.frame(OC = OC_seq, Ash = Ash_mean)
+grid_data$`OC:Ash` <- grid_data$OC * grid_data$Ash
+
+X_grid <- model.matrix(~ OC + Ash + OC:Ash, data = grid_data)
+
+# Predict on the grid for plotting
+grid_predictions <- predict(ridge_model, newx = X_grid)
+
+# Add predictions to the grid data
+grid_data$Q_pred <- as.vector(grid_predictions)
+
+# Visualization using ggplot2
+library(ggplot2)
+
+Qmax_Plot <- ggplot() +
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_line(data = grid_data, aes(x = OC, y = Q_pred), color = "brown", size = 1.5) +
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  scale_x_continuous(expand = c(0, 0), limits = c(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC))) +
+  scale_y_continuous(expand = c(0, 0), limits = c(min(Freund_w_0_df$Q_300), max(Freund_w_0_df$Q_300)))
+
+# Save and display the plot
+#ggsave(filename = "Ridge_Regression_Plot.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
+print(Qmax_Plot)
+```
+
+Weighted ash Iteraction Only
+
+```{r}
+
+# Fit the linear model with OC and the interaction term OC:Ash (without Ash main effect)
+lm_model_interaction_only <- lm(Q_300 ~ OC + OC:Ash, 
+                                data = Freund_w_0_df, 
+                                weights = 1 / (Freund_w_0_df$Ash + 1))
+
+# Extract the model summary
+summary_lm <- summary(lm_model_interaction_only)
+
+# Extract R-squared value
+r_squared <- summary_lm$r.squared
+r_squared_label <- paste("R^2 =", sprintf("%.2f", r_squared))  # Format to 2 decimal places
+
+# Extract all coefficients dynamically
+coefficients <- coef(summary_lm)
+
+# Dynamically format the regression equation
+equation <- paste0(
+  "Q_max = ", round(coefficients["(Intercept)"], 2),
+  " + ", round(coefficients["OC"], 2), " * OC",
+  " + ", round(coefficients["OC:Ash"], 2), " * OC:Ash"
+)
+
+# Extract p-values for all coefficients
+p_values <- summary_lm$coefficients[, "Pr(>|t|)"]
+significance <- sapply(p_values, function(p) {
+  if (p < 0.001) "***" else if (p < 0.01) "**" else if (p < 0.05) "*" else "ns"
+})
+
+# Extract F-statistic and residual standard deviation
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", round(p_values["OC"], 5), "(", significance["OC"], ")\n")
+cat("p-value for OC:Ash: ", round(p_values["OC:Ash"], 5), "(", significance["OC:Ash"], ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+
+
+# Generate a grid of OC values and set Ash to its mean for predictions
+OC_seq <- seq(-0.01, 0.57, length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+
+# Generate new data for prediction (including interaction)
+prediction_data <- data.frame(OC = OC_seq, Ash = Ash_mean)
+prediction_data$`OC:Ash` <- prediction_data$OC * prediction_data$Ash
+
+# Predict and add to prediction_data
+predictions <- predict(lm_model_interaction_only, newdata = prediction_data, interval = "confidence", level = 0.95)
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Plot the data and predictions
+Qmax_Plot <- ggplot() +
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type), 
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_ribbon(data = prediction_data, aes(x = OC, ymin = lwr, ymax = upr), 
+              fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  annotate("text", x = 0.45, y = 0.2, label = r_squared_label, 
+           size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.07, y = 2.4, label = "B_OC:Ash", size = 10, fontface = "bold") +
+  scale_fill_viridis_d(option = "D") +
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+# Save and display the plot
+#ggsave(filename = "Freund_Dose_OC_Ash_InteractionOnly_Plot.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
+print(Qmax_Plot)
+
+```
+
+Proportional Contribution of Ash
+
+-   considers proportional contribution of ash to total mass as an explicit term in the model. This term represents the relative influence of ash versus organic matter on sorption behavior:
+
+-   The Ash_fraction term reflects the dominance of ash versus organic material in the biochar.
+
+-   High values of Ash_fraction could represent conditions where sorption behavior is more dependent on ash composition and less on organic oxygen.
+
+-   Captures shifts in sorption mechanisms between ash-rich and organic-rich biochars.
+
+#### Ash - N
+
+```{r}
+
+# Fit the linear model with OC, Ash, N_prox, and the interaction term
+lm_model_extended <- lm(Q_300 ~ OC + Ash + N_prox + OC:Ash, 
+                        data = Freund_w_0_df, 
+                        weights = 1 / (Freund_w_0_df$Ash + 1))  # Weighted by Ash content
+
+# Extract model summary details
+summary_lm <- summary(lm_model_extended)
+r_squared <- summary_lm$r.squared
+coefficients <- coef(summary_lm)
+
+# Extract p-values for coefficients
+p_value_oc <- summary_lm$coefficients["OC", "Pr(>|t|)"]
+p_value_ash <- summary_lm$coefficients["Ash", "Pr(>|t|)"]
+p_value_nprox <- summary_lm$coefficients["N_prox", "Pr(>|t|)"]
+p_value_interaction <- summary_lm$coefficients["OC:Ash", "Pr(>|t|)"]
+
+# Format the regression equation
+equation <- paste(
+  "Q_max =", round(coefficients[1], 2), "+",
+  round(coefficients[2], 2), "* OC +",
+  round(coefficients[3], 2), "* Ash +",
+  round(coefficients[4], 2), "* N_prox +",
+  round(coefficients[5], 2), "* OC:Ash"
+)
+
+# Significance levels
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_nprox <- ifelse(p_value_nprox < 0.001, "***", ifelse(p_value_nprox < 0.01, "**", ifelse(p_value_nprox < 0.05, "*", "ns")))
+significance_interaction <- ifelse(p_value_interaction < 0.001, "***", ifelse(p_value_interaction < 0.01, "**", ifelse(p_value_interaction < 0.05, "*", "ns")))
+
+# Extract F-statistic and residual SD
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for N_prox: ", p_value_nprox, "(", significance_nprox, ")\n")
+cat("p-value for OC:Ash interaction: ", p_value_interaction, "(", significance_interaction, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC and set Ash, N_prox, and the interaction to their means
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+N_prox_mean <- mean(Freund_w_0_df$N_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  N_prox = N_prox_mean
+)
+prediction_data$`OC:Ash` <- prediction_data$OC * prediction_data$Ash
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot
+Qmax_Plot <- ggplot() +
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add confidence band and regression line
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Customize axes and theme
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  
+  # Add R² and annotations
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", sprintf("%.2f", r_squared)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "B_N_prox", size = 10, fontface = "bold") +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+ggsave(filename = "Freund_Dose_OC_Ash_N_Plot.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
+
+# Display the plot
+print(Qmax_Plot)
+```
+
+H
+
+```{r}
+
+# Fit the linear model with OC, Ash, N_prox, H_prox, and interaction terms
+lm_model_extended <- lm(Q_300 ~ OC + Ash + N_prox + H_prox + OC:Ash, 
+                        data = Freund_w_0_df, 
+                        weights = 1 / (Freund_w_0_df$Ash + 1))  # Weighted by Ash content
+
+# Extract model summary details
+summary_lm <- summary(lm_model_extended)
+r_squared <- summary_lm$r.squared
+coefficients <- coef(summary_lm)
+
+# Extract p-values for coefficients
+p_value_oc <- summary_lm$coefficients["OC", "Pr(>|t|)"]
+p_value_ash <- summary_lm$coefficients["Ash", "Pr(>|t|)"]
+p_value_nprox <- summary_lm$coefficients["N_prox", "Pr(>|t|)"]
+p_value_hprox <- summary_lm$coefficients["H_prox", "Pr(>|t|)"]
+p_value_interaction <- summary_lm$coefficients["OC:Ash", "Pr(>|t|)"]
+
+# Format the regression equation
+equation <- paste(
+  "Q_max =", round(coefficients[1], 2), "+",
+  round(coefficients[2], 2), "* OC +",
+  round(coefficients[3], 2), "* Ash +",
+  round(coefficients[4], 2), "* N_prox +",
+  round(coefficients[5], 2), "* H_prox +",
+  round(coefficients[6], 2), "* OC:Ash"
+)
+
+# Significance levels
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_nprox <- ifelse(p_value_nprox < 0.001, "***", ifelse(p_value_nprox < 0.01, "**", ifelse(p_value_nprox < 0.05, "*", "ns")))
+significance_hprox <- ifelse(p_value_hprox < 0.001, "***", ifelse(p_value_hprox < 0.01, "**", ifelse(p_value_hprox < 0.05, "*", "ns")))
+significance_interaction <- ifelse(p_value_interaction < 0.001, "***", ifelse(p_value_interaction < 0.01, "**", ifelse(p_value_interaction < 0.05, "*", "ns")))
+
+# Extract F-statistic and residual SD
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for N_prox: ", p_value_nprox, "(", significance_nprox, ")\n")
+cat("p-value for H_prox: ", p_value_hprox, "(", significance_hprox, ")\n")
+cat("p-value for OC:Ash interaction: ", p_value_interaction, "(", significance_interaction, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC values and set Ash, N_prox, and H_prox to their means for predictions
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+N_prox_mean <- mean(Freund_w_0_df$N_prox, na.rm = TRUE)
+H_prox_mean <- mean(Freund_w_0_df$H_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  N_prox = N_prox_mean,
+  H_prox = H_prox_mean
+)
+prediction_data$`OC:Ash` <- prediction_data$OC * prediction_data$Ash
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot
+Qmax_Plot <- ggplot() +
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add confidence band and regression line
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Customize axes and theme
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  
+  # Add R² and annotations
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", sprintf("%.2f", r_squared)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "B_H_prox", size = 10, fontface = "bold") +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+# Display the plot
+print(Qmax_Plot)
+```
+
+Interaction
+
+```{r}
+
+# Fit the linear model with OC, Ash, N_prox, H_prox, and their interaction
+lm_model_extended <- lm(Q_300 ~ OC + Ash + N_prox + H_prox + OC:Ash:N_prox:H_prox, 
+                        data = Freund_w_0_df, 
+                        weights = 1 / (Freund_w_0_df$Ash + 1))  # Weighted by Ash content
+
+# Extract model summary details
+summary_lm <- summary(lm_model_extended)
+r_squared <- summary_lm$r.squared
+coefficients <- coef(summary_lm)
+
+# Extract p-values for coefficients
+p_value_oc <- summary_lm$coefficients["OC", "Pr(>|t|)"]
+p_value_ash <- summary_lm$coefficients["Ash", "Pr(>|t|)"]
+p_value_nprox <- summary_lm$coefficients["N_prox", "Pr(>|t|)"]
+p_value_hprox <- summary_lm$coefficients["H_prox", "Pr(>|t|)"]
+p_value_interaction <- summary_lm$coefficients["OC:Ash:N_prox:H_prox", "Pr(>|t|)"]
+
+# Format the regression equation
+equation <- paste(
+  "Q_max =", round(coefficients[1], 2), "+",
+  round(coefficients[2], 2), "* OC +",
+  round(coefficients[3], 2), "* Ash +",
+  round(coefficients[4], 2), "* N_prox +",
+  round(coefficients[5], 2), "* H_prox +",
+  round(coefficients[6], 2), "* OC:Ash:N_prox:H_prox"
+)
+
+# Significance levels
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_nprox <- ifelse(p_value_nprox < 0.001, "***", ifelse(p_value_nprox < 0.01, "**", ifelse(p_value_nprox < 0.05, "*", "ns")))
+significance_hprox <- ifelse(p_value_hprox < 0.001, "***", ifelse(p_value_hprox < 0.01, "**", ifelse(p_value_hprox < 0.05, "*", "ns")))
+significance_interaction <- ifelse(p_value_interaction < 0.001, "***", ifelse(p_value_interaction < 0.01, "**", ifelse(p_value_interaction < 0.05, "*", "ns")))
+
+# Extract F-statistic and residual SD
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for N_prox: ", p_value_nprox, "(", significance_nprox, ")\n")
+cat("p-value for H_prox: ", p_value_hprox, "(", significance_hprox, ")\n")
+cat("p-value for OC:Ash:N_prox:H_prox interaction: ", p_value_interaction, "(", significance_interaction, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC values and set Ash, N_prox, and H_prox to their means
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+N_prox_mean <- mean(Freund_w_0_df$N_prox, na.rm = TRUE)
+H_prox_mean <- mean(Freund_w_0_df$H_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  N_prox = N_prox_mean,
+  H_prox = H_prox_mean
+)
+prediction_data$`OC:Ash:N_prox:H_prox` <- prediction_data$OC * prediction_data$Ash * prediction_data$N_prox * prediction_data$H_prox
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot
+Qmax_Plot <- ggplot() +
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add confidence band and regression line
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Customize axes and theme
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  
+  # Add R² and annotations
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", sprintf("%.2f", r_squared)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "Interaction Effect", size = 10, fontface = "bold") +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+# Display the plot
+print(Qmax_Plot)
+```
+
+Ash, H
+
+```{r}
+
+# Fit the linear model with OC, Ash, H_prox, and their interaction term
+lm_model_extended <- lm(Q_300 ~ OC + Ash + H_prox + OC:Ash:H_prox, 
+                        data = Freund_w_0_df, 
+                        weights = 1 / (Freund_w_0_df$Ash + 1))  # Weighted by Ash content
+
+# Extract model summary details
+summary_lm <- summary(lm_model_extended)
+r_squared <- summary_lm$r.squared
+coefficients <- coef(summary_lm)
+
+# Extract p-values for coefficients
+p_value_oc <- summary_lm$coefficients["OC", "Pr(>|t|)"]
+p_value_ash <- summary_lm$coefficients["Ash", "Pr(>|t|)"]
+p_value_hprox <- summary_lm$coefficients["H_prox", "Pr(>|t|)"]
+p_value_interaction <- summary_lm$coefficients["OC:Ash:H_prox", "Pr(>|t|)"]
+
+# Format the regression equation
+equation <- paste(
+  "Q_max =", round(coefficients[1], 2), "+",
+  round(coefficients[2], 2), "* OC +",
+  round(coefficients[3], 2), "* Ash +",
+  round(coefficients[4], 2), "* H_prox +",
+  round(coefficients[5], 2), "* OC:Ash:H_prox"
+)
+
+# Significance levels
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_hprox <- ifelse(p_value_hprox < 0.001, "***", ifelse(p_value_hprox < 0.01, "**", ifelse(p_value_hprox < 0.05, "*", "ns")))
+significance_interaction <- ifelse(p_value_interaction < 0.001, "***", ifelse(p_value_interaction < 0.01, "**", ifelse(p_value_interaction < 0.05, "*", "ns")))
+
+# Extract F-statistic and residual SD
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for H_prox: ", p_value_hprox, "(", significance_hprox, ")\n")
+cat("p-value for OC:Ash:H_prox interaction: ", p_value_interaction, "(", significance_interaction, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC values and set Ash and H_prox to their means
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+H_prox_mean <- mean(Freund_w_0_df$H_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  H_prox = H_prox_mean
+)
+prediction_data$`OC:Ash:H_prox` <- prediction_data$OC * prediction_data$Ash * prediction_data$H_prox
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot
+Qmax_Plot <- ggplot() +
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add confidence band and regression line
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Customize axes and theme
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  
+  # Add R² and annotations
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", sprintf("%.2f", r_squared)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "Interaction Effect", size = 10, fontface = "bold") +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+# Display the plot
+print(Qmax_Plot)
+```
+
+```{r}
+
+# Fit the linear model with OC, Ash, and H_prox
+lm_model_extended <- lm(Q_300 ~ OC + Ash + H_prox, 
+                        data = Freund_w_0_df, 
+                        weights = 1 / (Freund_w_0_df$Ash + 1))  # Weighted by Ash content
+
+# Extract model summary details
+summary_lm <- summary(lm_model_extended)
+r_squared <- summary_lm$r.squared
+coefficients <- coef(summary_lm)
+
+# Extract p-values for coefficients
+p_value_oc <- summary_lm$coefficients["OC", "Pr(>|t|)"]
+p_value_ash <- summary_lm$coefficients["Ash", "Pr(>|t|)"]
+p_value_hprox <- summary_lm$coefficients["H_prox", "Pr(>|t|)"]
+
+# Format the regression equation
+equation <- paste(
+  "Q_max =", round(coefficients[1], 2), "+",
+  round(coefficients[2], 2), "* OC +",
+  round(coefficients[3], 2), "* Ash +",
+  round(coefficients[4], 2), "* H_prox"
+)
+
+# Significance levels
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_hprox <- ifelse(p_value_hprox < 0.001, "***", ifelse(p_value_hprox < 0.01, "**", ifelse(p_value_hprox < 0.05, "*", "ns")))
+
+# Extract F-statistic and residual SD
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for H_prox: ", p_value_hprox, "(", significance_hprox, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC values and set Ash and H_prox to their means
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+H_prox_mean <- mean(Freund_w_0_df$H_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  H_prox = H_prox_mean
+)
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot
+Qmax_Plot <- ggplot() +
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add confidence band and regression line
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Customize axes and theme
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  
+  # Add R² and annotations
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", sprintf("%.2f", r_squared)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "H_prox Effect", size = 10, fontface = "bold") +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+# Display the plot
+print(Qmax_Plot)
+```
+
+```{r}
+
+# Fit the linear model with OC, Ash, N_prox, and the interaction terms
+lm_model_extended <- lm(Q_300 ~ OC + Ash + N_prox + OC:Ash + OC:N_prox + Ash:N_prox, 
+                        data = Freund_w_0_df, 
+                        weights = 1 / (Freund_w_0_df$Ash + 1))  # Weighted by Ash content
+
+# Extract model summary details
+summary_lm <- summary(lm_model_extended)
+r_squared <- summary_lm$r.squared
+coefficients <- coef(summary_lm)
+
+# Extract p-values for coefficients
+p_value_oc <- summary_lm$coefficients["OC", "Pr(>|t|)"]
+p_value_ash <- summary_lm$coefficients["Ash", "Pr(>|t|)"]
+p_value_nprox <- summary_lm$coefficients["N_prox", "Pr(>|t|)"]
+p_value_interaction_oc_ash <- summary_lm$coefficients["OC:Ash", "Pr(>|t|)"]
+p_value_interaction_oc_nprox <- summary_lm$coefficients["OC:N_prox", "Pr(>|t|)"]
+p_value_interaction_ash_nprox <- summary_lm$coefficients["Ash:N_prox", "Pr(>|t|)"]
+
+# Format the regression equation
+equation <- paste(
+  "Q_max =", round(coefficients[1], 2), "+",
+  round(coefficients[2], 2), "* OC +",
+  round(coefficients[3], 2), "* Ash +",
+  round(coefficients[4], 2), "* N_prox +",
+  round(coefficients[5], 2), "* OC:Ash +",
+  round(coefficients[6], 2), "* OC:N_prox +",
+  round(coefficients[7], 2), "* Ash:N_prox"
+)
+
+# Significance levels
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_nprox <- ifelse(p_value_nprox < 0.001, "***", ifelse(p_value_nprox < 0.01, "**", ifelse(p_value_nprox < 0.05, "*", "ns")))
+significance_interaction_oc_ash <- ifelse(p_value_interaction_oc_ash < 0.001, "***", ifelse(p_value_interaction_oc_ash < 0.01, "**", ifelse(p_value_interaction_oc_ash < 0.05, "*", "ns")))
+significance_interaction_oc_nprox <- ifelse(p_value_interaction_oc_nprox < 0.001, "***", ifelse(p_value_interaction_oc_nprox < 0.01, "**", ifelse(p_value_interaction_oc_nprox < 0.05, "*", "ns")))
+significance_interaction_ash_nprox <- ifelse(p_value_interaction_ash_nprox < 0.001, "***", ifelse(p_value_interaction_ash_nprox < 0.01, "**", ifelse(p_value_interaction_ash_nprox < 0.05, "*", "ns")))
+
+# Extract F-statistic and residual SD
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for N_prox: ", p_value_nprox, "(", significance_nprox, ")\n")
+cat("p-value for OC:Ash interaction: ", p_value_interaction_oc_ash, "(", significance_interaction_oc_ash, ")\n")
+cat("p-value for OC:N_prox interaction: ", p_value_interaction_oc_nprox, "(", significance_interaction_oc_nprox, ")\n")
+cat("p-value for Ash:N_prox interaction: ", p_value_interaction_ash_nprox, "(", significance_interaction_ash_nprox, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC and set Ash and N_prox to their means
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+N_prox_mean <- mean(Freund_w_0_df$N_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  N_prox = N_prox_mean
+)
+prediction_data$`OC:Ash` <- prediction_data$OC * prediction_data$Ash
+prediction_data$`OC:N_prox` <- prediction_data$OC * prediction_data$N_prox
+prediction_data$`Ash:N_prox` <- prediction_data$Ash * prediction_data$N_prox
+
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot
+Qmax_Plot <- ggplot() +
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add confidence band and regression line
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Customize axes and theme
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  
+  # Add R² and annotations
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", sprintf("%.2f", r_squared)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "B_N_prox Effects", size = 10, fontface = "bold") +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+#ggsave(filename = "Freund_Dose_OC_Ash_N_Plot.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
+
+# Display the plot
+print(Qmax_Plot)
+```
+
+```{r}
+
+# Fit the linear model with OC, Ash, H_prox, and the interaction terms
+lm_model_extended <- lm(Q_300 ~ OC + Ash + H_prox + OC:Ash + OC:H_prox + Ash:H_prox, 
+                        data = Freund_w_0_df, 
+                        weights = 1 / (Freund_w_0_df$Ash + 1))  # Weighted by Ash content
+
+# Extract model summary details
+summary_lm <- summary(lm_model_extended)
+r_squared <- summary_lm$r.squared
+coefficients <- coef(summary_lm)
+
+# Extract p-values for coefficients
+p_value_oc <- summary_lm$coefficients["OC", "Pr(>|t|)"]
+p_value_ash <- summary_lm$coefficients["Ash", "Pr(>|t|)"]
+p_value_hprox <- summary_lm$coefficients["H_prox", "Pr(>|t|)"]
+p_value_interaction_oc_ash <- summary_lm$coefficients["OC:Ash", "Pr(>|t|)"]
+p_value_interaction_oc_hprox <- summary_lm$coefficients["OC:H_prox", "Pr(>|t|)"]
+p_value_interaction_ash_hprox <- summary_lm$coefficients["Ash:H_prox", "Pr(>|t|)"]
+
+# Format the regression equation
+equation <- paste(
+  "Q_max =", round(coefficients[1], 2), "+",
+  round(coefficients[2], 2), "* OC +",
+  round(coefficients[3], 2), "* Ash +",
+  round(coefficients[4], 2), "* H_prox +",
+  round(coefficients[5], 2), "* OC:Ash +",
+  round(coefficients[6], 2), "* OC:H_prox +",
+  round(coefficients[7], 2), "* Ash:H_prox"
+)
+
+# Significance levels
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_hprox <- ifelse(p_value_hprox < 0.001, "***", ifelse(p_value_hprox < 0.01, "**", ifelse(p_value_hprox < 0.05, "*", "ns")))
+significance_interaction_oc_ash <- ifelse(p_value_interaction_oc_ash < 0.001, "***", ifelse(p_value_interaction_oc_ash < 0.01, "**", ifelse(p_value_interaction_oc_ash < 0.05, "*", "ns")))
+significance_interaction_oc_hprox <- ifelse(p_value_interaction_oc_hprox < 0.001, "***", ifelse(p_value_interaction_oc_hprox < 0.01, "**", ifelse(p_value_interaction_oc_hprox < 0.05, "*", "ns")))
+significance_interaction_ash_hprox <- ifelse(p_value_interaction_ash_hprox < 0.001, "***", ifelse(p_value_interaction_ash_hprox < 0.01, "**", ifelse(p_value_interaction_ash_hprox < 0.05, "*", "ns")))
+
+# Extract F-statistic and residual SD
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for H_prox: ", p_value_hprox, "(", significance_hprox, ")\n")
+cat("p-value for OC:Ash interaction: ", p_value_interaction_oc_ash, "(", significance_interaction_oc_ash, ")\n")
+cat("p-value for OC:H_prox interaction: ", p_value_interaction_oc_hprox, "(", significance_interaction_oc_hprox, ")\n")
+cat("p-value for Ash:H_prox interaction: ", p_value_interaction_ash_hprox, "(", significance_interaction_ash_hprox, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC and set Ash and H_prox to their means
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+H_prox_mean <- mean(Freund_w_0_df$H_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  H_prox = H_prox_mean
+)
+prediction_data$`OC:Ash` <- prediction_data$OC * prediction_data$Ash
+prediction_data$`OC:H_prox` <- prediction_data$OC * prediction_data$H_prox
+prediction_data$`Ash:H_prox` <- prediction_data$Ash * prediction_data$H_prox
+
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+
+# Add predictions and confidence intervals
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot
+Qmax_Plot <- ggplot() +
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add confidence band and regression line
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Customize axes and theme
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  
+  # Add R² and annotations
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", sprintf("%.2f", r_squared)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "B_H_prox Effects", size = 10, fontface = "bold") +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+# Save and display the plot
+#ggsave(filename = "Freund_Dose_OC_Ash_H_Plot.png", plot = Qmax_Plot, width = 10, height = 8, dpi = 300)
+print(Qmax_Plot)
+```
+
+```{r}
+
+# Fit the linear model with OC, Ash, H_prox, and interactions OC:Ash + Ash:H_prox
+lm_model_extended_1 <- lm(Q_300 ~ OC + Ash + H_prox + OC:Ash + Ash:H_prox, 
+                          data = Freund_w_0_df, 
+                          weights = 1 / (Freund_w_0_df$Ash + 1))
+
+# Extract model summary details
+summary_lm_1 <- summary(lm_model_extended_1)
+r_squared_1 <- summary_lm_1$r.squared
+coefficients_1 <- coef(summary_lm_1)
+
+# Print regression equation
+equation_1 <- paste(
+  "Q_max =", round(coefficients_1[1], 2), "+",
+  round(coefficients_1[2], 2), "* OC +",
+  round(coefficients_1[3], 2), "* Ash +",
+  round(coefficients_1[4], 2), "* H_prox +",
+  round(coefficients_1[5], 2), "* OC:Ash +",
+  round(coefficients_1[6], 2), "* Ash:H_prox"
+)
+cat("Equation: ", equation_1, "\n")
+cat("R^2: ", round(r_squared_1, 2), "\n")
+
+# Create a grid of OC values and set Ash and H_prox to their means
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+H_prox_mean <- mean(Freund_w_0_df$H_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data_1 <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  H_prox = H_prox_mean
+)
+prediction_data_1$`OC:Ash` <- prediction_data_1$OC * prediction_data_1$Ash
+prediction_data_1$`Ash:H_prox` <- prediction_data_1$Ash * prediction_data_1$H_prox
+
+predictions_1 <- predict(lm_model_extended_1, newdata = prediction_data_1, interval = "confidence", level = 0.95)
+
+# Add predictions to data
+prediction_data_1$fit <- predictions_1[, "fit"]
+prediction_data_1$lwr <- predictions_1[, "lwr"]
+prediction_data_1$upr <- predictions_1[, "upr"]
+
+# Plot
+Qmax_Plot_1 <- ggplot() +
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type), 
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_ribbon(data = prediction_data_1, aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data_1, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", round(r_squared_1, 2)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  labs(x = "OC Bulk", y = "Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(panel.border = element_rect(color = "black", fill = NA, size = 3))
+
+print(Qmax_Plot_1)
+```
+
+```{r}
+
+# Fit the linear model with OC, Ash, H_prox, and interactions OC:Ash + OC:H_prox
+lm_model_extended_2 <- lm(Q_300 ~ OC + Ash + H_prox + OC:Ash + OC:H_prox, 
+                          data = Freund_w_0_df, 
+                          weights = 1 / (Freund_w_0_df$Ash + 1))
+
+# Extract model summary details
+summary_lm_2 <- summary(lm_model_extended_2)
+r_squared_2 <- summary_lm_2$r.squared
+coefficients_2 <- coef(summary_lm_2)
+
+# Print regression equation
+equation_2 <- paste(
+  "Q_max =", round(coefficients_2[1], 2), "+",
+  round(coefficients_2[2], 2), "* OC +",
+  round(coefficients_2[3], 2), "* Ash +",
+  round(coefficients_2[4], 2), "* H_prox +",
+  round(coefficients_2[5], 2), "* OC:Ash +",
+  round(coefficients_2[6], 2), "* OC:H_prox"
+)
+cat("Equation: ", equation_2, "\n")
+cat("R^2: ", round(r_squared_2, 2), "\n")
+
+# Create a grid of OC values and set Ash and H_prox to their means
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+H_prox_mean <- mean(Freund_w_0_df$H_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data_2 <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  H_prox = H_prox_mean
+)
+prediction_data_2$`OC:Ash` <- prediction_data_2$OC * prediction_data_2$Ash
+prediction_data_2$`OC:H_prox` <- prediction_data_2$OC * prediction_data_2$H_prox
+
+predictions_2 <- predict(lm_model_extended_2, newdata = prediction_data_2, interval = "confidence", level = 0.95)
+
+# Add predictions to data
+prediction_data_2$fit <- predictions_2[, "fit"]
+prediction_data_2$lwr <- predictions_2[, "lwr"]
+prediction_data_2$upr <- predictions_2[, "upr"]
+
+# Plot
+Qmax_Plot_2 <- ggplot() +
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type), 
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  geom_ribbon(data = prediction_data_2, aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data_2, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", round(r_squared_2, 2)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  labs(x = "OC Bulk", y = "Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(panel.border = element_rect(color = "black", fill = NA, size = 3))
+
+print(Qmax_Plot_2)
+```
+
+\* \* \*
+
+```{r}
+
+# Fit the linear model with OC, Ash, H_prox, and interaction term OC:Ash
+lm_model_extended <- lm(Q_300 ~ OC + Ash + H_prox + OC:Ash, 
+                        data = Freund_w_0_df, 
+                        weights = 1 / (Freund_w_0_df$Ash + 1))  # Weighted by Ash content
+
+# Extract model summary
+summary_lm <- summary(lm_model_extended)
+r_squared <- summary_lm$r.squared
+coefficients <- coef(summary_lm)
+
+# Extract p-values for coefficients
+p_value_oc <- summary_lm$coefficients["OC", "Pr(>|t|)"]
+p_value_ash <- summary_lm$coefficients["Ash", "Pr(>|t|)"]
+p_value_hprox <- summary_lm$coefficients["H_prox", "Pr(>|t|)"]
+p_value_interaction <- summary_lm$coefficients["OC:Ash", "Pr(>|t|)"]
+
+# Format the regression equation
+equation <- paste(
+  "Q_max =", round(coefficients[1], 2), "+",
+  round(coefficients[2], 2), "* OC +",
+  round(coefficients[3], 2), "* Ash +",
+  round(coefficients[4], 2), "* H_prox +",
+  round(coefficients[5], 2), "* OC:Ash"
+)
+
+# Significance levels
+significance_oc <- ifelse(p_value_oc < 0.001, "***", ifelse(p_value_oc < 0.01, "**", ifelse(p_value_oc < 0.05, "*", "ns")))
+significance_ash <- ifelse(p_value_ash < 0.001, "***", ifelse(p_value_ash < 0.01, "**", ifelse(p_value_ash < 0.05, "*", "ns")))
+significance_hprox <- ifelse(p_value_hprox < 0.001, "***", ifelse(p_value_hprox < 0.01, "**", ifelse(p_value_hprox < 0.05, "*", "ns")))
+significance_interaction <- ifelse(p_value_interaction < 0.001, "***", ifelse(p_value_interaction < 0.01, "**", ifelse(p_value_interaction < 0.05, "*", "ns")))
+
+# Extract F-statistic and residual SD
+f_statistic <- summary_lm$fstatistic[1]
+df1 <- summary_lm$fstatistic[2]
+df2 <- summary_lm$fstatistic[3]
+residual_sd <- summary_lm$sigma
+
+# Print regression details
+cat("Equation: ", equation, "\n")
+cat("R^2: ", round(r_squared, 2), "\n")
+cat("p-value for OC: ", p_value_oc, "(", significance_oc, ")\n")
+cat("p-value for Ash: ", p_value_ash, "(", significance_ash, ")\n")
+cat("p-value for H_prox: ", p_value_hprox, "(", significance_hprox, ")\n")
+cat("p-value for OC:Ash interaction: ", p_value_interaction, "(", significance_interaction, ")\n")
+cat("F-statistic: F(", df1, ",", df2, ") = ", round(f_statistic, 2), "\n")
+cat("Residual standard deviation: ", round(residual_sd, 2), "\n")
+
+# Create a grid of OC values and set Ash and H_prox to their means
+OC_seq <- seq(min(Freund_w_0_df$OC), max(Freund_w_0_df$OC), length.out = 100)
+Ash_mean <- mean(Freund_w_0_df$Ash, na.rm = TRUE)
+H_prox_mean <- mean(Freund_w_0_df$H_prox, na.rm = TRUE)
+
+# Generate new data for prediction
+prediction_data <- data.frame(
+  OC = OC_seq,
+  Ash = Ash_mean,
+  H_prox = H_prox_mean
+)
+prediction_data$`OC:Ash` <- prediction_data$OC * prediction_data$Ash
+
+# Generate predictions
+predictions <- predict(lm_model_extended, newdata = prediction_data, interval = "confidence", level = 0.95)
+prediction_data$fit <- predictions[, "fit"]
+prediction_data$lwr <- predictions[, "lwr"]
+prediction_data$upr <- predictions[, "upr"]
+
+# Create the plot
+Qmax_Plot <- ggplot() +
+  # Add points from the original data
+  geom_point(data = Freund_w_0_df, aes(x = OC, y = Q_300, fill = Type),
+             shape = 21, size = 6, stroke = 2, color = "black") +
+  
+  # Add confidence band and regression line
+  geom_ribbon(data = prediction_data, 
+              aes(x = OC, ymin = lwr, ymax = upr), fill = "grey", alpha = 0.3) +
+  geom_line(data = prediction_data, aes(x = OC, y = fit), color = "brown", size = 1.5) +
+  
+  # Customize axes and theme
+  xlab("OC Bulk") +
+  ylab("Q (mmol NH4/g biochar)") +
+  scale_fill_viridis_d(option = "D") +
+  theme_classic(base_size = 28) +
+  theme(
+    text = element_text(family = "Helvetica"),
+    legend.position = "none",
+    axis.text.x = element_text(size = 26),
+    axis.text.y = element_text(size = 26),
+    axis.title.x = element_text(margin = margin(t = 20), size = 26),
+    axis.title.y = element_text(margin = margin(r = 20), size = 26),
+    panel.border = element_rect(color = "black", fill = NA, size = 3)
+  ) +
+  
+  # Add R² and annotations
+  annotate("text", x = 0.35, y = 2.4, label = paste("R^2 =", sprintf("%.2f", r_squared)), 
+           hjust = 1, vjust = 1, size = 8, fontface = "bold", color = "black") +
+  annotate("text", x = 0.01, y = 2.4, label = "B_H_prox Effects", size = 10, fontface = "bold") +
+  
+  # Set axis limits
+  scale_x_continuous(expand = c(0, 0), limits = c(-0.01, 0.57)) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.3, 2.7))
+
+# Display the plot
+print(Qmax_Plot)
 ```
